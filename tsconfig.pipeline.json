@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "es2022",
+    "outDir": "build/.pipeline",
+    "rootDir": "src/core",
+    "noEmit": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "ignoreDeprecations": "6.0",
+    "composite": false,
+    "incremental": false
+  },
+  "files": [
+    "src/core/relayer.ts",
+    "src/core/payment-intent.ts",
+    "src/core/types.ts",
+    "src/core/chain.ts",
+    "src/core/submit-relay.ts"
+  ]
+}

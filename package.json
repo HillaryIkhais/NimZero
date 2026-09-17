@@ -1,0 +1,44 @@
+{
+  "name": "zero",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:fork": "hardhat run scripts/forktest.cjs",
+    "test:kill": "hardhat run scripts/killtest.cjs --network localhost",
+    "fork:kill": "hardhat run scripts/forktest.cjs",
+    "fork:pipeline": "tsc --project tsconfig.pipeline.json && node scripts/relay-path-build.mjs && hardhat run scripts/relay-path.cjs",
+    "relay:build": "tsc --project tsconfig.pipeline.json && node scripts/relay-path-build.mjs",
+    "relay:sign": "node scripts/sign-authorization.cjs",
+    "relay:submit": "node scripts/relay-submit.cjs"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.6.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.0.8",
+    "@types/chai": "^4.3.20",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^24.13.3",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "ethers": "^6.17.0",
+    "hardhat": "^2.22.0",
+    "oxlint": "^1.81.0",
+    "qrcode": "^1.5.4",
+    "ts-node": "^10.9.2",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
+  }
+}
