@@ -27,9 +27,9 @@
   width: 30px;
   height: 30px;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--citrus), #ff5f3d);
-  color: #1a0d00;
-  box-shadow: 0 4px 18px rgba(255, 138, 0, 0.35);
+  background: linear-gradient(135deg, var(--gold-2), var(--gold) 55%, var(--gold-3));
+  color: var(--ink);
+  box-shadow: 0 6px 18px -6px rgba(216, 138, 0, 0.55);
 }
 
 .brand-bolt svg {
@@ -41,6 +41,7 @@
   font-weight: 700;
   letter-spacing: 0.24em;
   font-size: 1rem;
+  color: var(--blue);
 }
 
 .header-pills {
@@ -53,18 +54,18 @@
   font-family: var(--font-mono);
   font-size: 0.56rem;
   letter-spacing: 0.1em;
-  color: var(--sky);
-  border: 1px solid rgba(58, 215, 255, 0.4);
-  background: rgba(58, 215, 255, 0.08);
+  color: var(--blue);
+  border: 1px solid var(--line-2);
+  background: var(--surface);
   border-radius: 999px;
   padding: 4px 9px;
   text-transform: uppercase;
 }
 
 .badge.demo {
-  color: var(--citrus);
-  border-color: rgba(255, 138, 0, 0.45);
-  background: rgba(255, 138, 0, 0.1);
+  color: var(--orange);
+  border-color: rgba(232, 118, 43, 0.4);
+  background: rgba(232, 118, 43, 0.08);
 }
 
 /* ── Main ── */
@@ -109,7 +110,7 @@
 }
 
 .step.done:not(:last-child)::after {
-  background: linear-gradient(90deg, var(--mint), var(--sky));
+  background: linear-gradient(90deg, var(--green), #1fae7d);
 }
 
 .step-dot {
@@ -122,9 +123,9 @@
   border-radius: 50%;
   font-family: var(--font-mono);
   font-size: 0.72rem;
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  color: var(--muted);
+  background: var(--surface);
+  border: 1.5px solid var(--line-2);
+  color: var(--dim);
   transition: all 0.25s ease;
 }
 
@@ -134,15 +135,15 @@
 }
 
 .step.now .step-dot {
-  border-color: var(--citrus);
-  color: var(--citrus);
-  box-shadow: 0 0 0 4px rgba(255, 138, 0, 0.14), 0 4px 16px rgba(255, 138, 0, 0.25);
+  border-color: var(--gold);
+  color: var(--gold-3);
+  box-shadow: 0 0 0 4px rgba(248, 168, 27, 0.16), 0 6px 16px -8px rgba(216, 138, 0, 0.5);
 }
 
 .step.done .step-dot {
-  background: linear-gradient(135deg, var(--mint), #14b881);
+  background: linear-gradient(135deg, var(--green), #1fae7d);
   border-color: transparent;
-  color: #04231a;
+  color: #ffffff;
 }
 
 .step-label {
@@ -153,7 +154,7 @@
 }
 
 .step.now .step-label {
-  color: var(--text);
+  color: var(--blue);
 }
 
 /* ── Hero ── */
@@ -173,7 +174,7 @@
   font-family: var(--font-mono);
   font-size: 0.62rem;
   letter-spacing: 0.32em;
-  color: var(--citrus);
+  color: var(--orange);
   margin-bottom: 10px;
 }
 
@@ -182,10 +183,11 @@
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.02em;
+  color: var(--blue);
 }
 
 .hero-title .ink {
-  color: var(--citrus);
+  color: var(--orange);
   display: inline-block;
 }
 
@@ -196,30 +198,31 @@
   line-height: 1.5;
 }
 
-/* ── Wallet card ── */
+/* ── Wallet card (Nimiq blue) ── */
 .wallet-card {
   position: relative;
   overflow: hidden;
-  border-radius: 22px;
+  border-radius: 26px;
   padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  color: #ffffff;
   background:
-    radial-gradient(120% 150% at 85% -20%, rgba(139, 123, 255, 0.28) 0%, transparent 55%),
-    radial-gradient(120% 150% at 0% 110%, rgba(255, 95, 61, 0.22) 0%, transparent 55%),
-    linear-gradient(160deg, #1b2742 0%, #0f1730 58%, #151b31 100%);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+    radial-gradient(120% 150% at 85% -20%, rgba(248, 168, 27, 0.22) 0%, transparent 55%),
+    radial-gradient(120% 150% at 0% 110%, rgba(232, 118, 43, 0.16) 0%, transparent 55%),
+    linear-gradient(160deg, #262b55 0%, #1f2348 55%, #2b3060 100%);
+  border: 1px solid rgba(31, 35, 72, 0.6);
   box-shadow:
-    0 22px 48px -20px rgba(0, 0, 0, 0.7),
-    0 2px 0 0 rgba(255, 255, 255, 0.04) inset;
+    0 22px 48px -22px rgba(31, 35, 72, 0.55),
+    0 2px 0 0 rgba(255, 255, 255, 0.08) inset;
 }
 
 .wallet-aurora {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(60% 50% at 90% 8%, rgba(255, 138, 0, 0.16), transparent 60%);
+  background: radial-gradient(60% 50% at 90% 8%, rgba(248, 168, 27, 0.2), transparent 60%);
   animation: aurora 9s ease-in-out infinite alternate;
 }
 
@@ -239,6 +242,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
 }
 
 .wallet-brand {
@@ -251,18 +255,49 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   font-size: 0.92rem;
+  color: #ffffff;
 }
 
 .chip-mono {
   font-family: var(--font-mono);
   font-size: 0.68rem;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   padding: 5px 9px;
   border-radius: 999px;
+  white-space: nowrap;
 }
 
+.addr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.addr-chip .addr-copy {
+  display: inline-grid;
+  place-items: center;
+  color: var(--gold-2);
+}
+
+.addr-chip .addr-copy svg {
+  width: 12px;
+  height: 12px;
+}
+
+.addr-chip.is-full {
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.35;
+  max-width: 210px;
+  font-size: 0.6rem;
+  border-radius: 14px;
+  text-align: left;
+}
+
+/* ── Card chip ── */
 .chip-row {
   display: flex;
   justify-content: space-between;
@@ -273,17 +308,16 @@
   width: 40px;
   height: 30px;
   border-radius: 7px;
-  background: linear-gradient(135deg, #f4d27c, #d9a93f 60%, #b98a2a);
+  background: linear-gradient(135deg, #ffd27a, var(--gold) 60%, var(--gold-3));
   position: relative;
   overflow: hidden;
-  opacity: 0.92;
 }
 
 .chip i,
 .contactless i {
   position: absolute;
   display: block;
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(31, 35, 72, 0.3);
   transform: rotate(-45deg);
 }
 
@@ -319,13 +353,14 @@
   position: relative;
   width: 8px;
   height: 8px;
-  border: 2px solid var(--sky);
+  border: 2px solid var(--gold-2);
   border-left-color: transparent;
   border-radius: 50%;
   transform: rotate(-30deg);
   background: none;
 }
 
+/* ── Wallet balance ── */
 .wallet-balance {
   display: flex;
   align-items: baseline;
@@ -333,18 +368,17 @@
 }
 
 .balance-amount {
-  position: relative;
   font-family: var(--font-mono);
   font-size: 2.2rem;
   font-weight: 700;
   letter-spacing: -0.03em;
-  color: var(--text);
-  text-shadow: 0 2px 30px rgba(58, 215, 255, 0.15);
+  color: #ffffff;
+  text-shadow: 0 2px 30px rgba(248, 168, 27, 0.25);
 }
 
 .balance-token {
   font-weight: 600;
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .wallet-rows {
@@ -364,13 +398,13 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .w-label svg {
   width: 14px;
   height: 14px;
-  color: var(--citrus);
+  color: var(--gold-2);
 }
 
 .mini-dot {
@@ -380,18 +414,18 @@
 }
 
 .mini-dot.mint {
-  background: var(--mint);
-  box-shadow: 0 0 10px rgba(46, 230, 166, 0.7);
+  background: var(--green);
+  box-shadow: 0 0 10px rgba(37, 194, 143, 0.7);
 }
 
 .w-value {
   font-family: var(--font-mono);
-  color: var(--text);
+  color: #ffffff;
 }
 
 .w-value.blb,
 .blb {
-  color: var(--mint);
+  color: var(--gold-2);
 }
 
 .btn-connect {
@@ -414,9 +448,9 @@
   justify-content: center;
   gap: 8px;
   font-size: 0.78rem;
-  color: var(--mint);
-  background: rgba(46, 230, 166, 0.09);
-  border: 1px solid rgba(46, 230, 166, 0.25);
+  color: var(--gold-2);
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 12px;
   padding: 10px;
 }
@@ -430,17 +464,17 @@
 .sponsor-bolt svg {
   width: 15px;
   height: 15px;
-  color: var(--mint);
+  color: var(--gold-2);
 }
 
 @keyframes boltPulse {
   0%, 100% {
     transform: scale(1);
-    filter: drop-shadow(0 0 0 rgba(46, 230, 166, 0));
+    filter: drop-shadow(0 0 0 rgba(248, 168, 27, 0));
   }
   50% {
     transform: scale(1.18);
-    filter: drop-shadow(0 0 8px rgba(46, 230, 166, 0.6));
+    filter: drop-shadow(0 0 8px rgba(248, 168, 27, 0.6));
   }
 }
 
@@ -456,16 +490,17 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 22px;
   padding: 18px 16px;
+  box-shadow: 0 12px 32px -20px rgba(31, 35, 72, 0.35);
 }
 
 .amount-prefix {
   font-size: 1.6rem;
   font-weight: 700;
-  color: var(--citrus);
+  color: var(--orange);
 }
 
 .amount-input {
@@ -473,7 +508,7 @@
   background: none;
   border: none;
   outline: none;
-  color: var(--text);
+  color: var(--blue);
   font-family: var(--font-mono);
   font-size: 2rem;
   font-weight: 700;
@@ -489,14 +524,12 @@
   margin: 0;
 }
 
-.amount-input:focus ~ .amount-input-placeholder {
-  display: none;
-}
-
 .amount-line {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .amount-note {
@@ -508,13 +541,14 @@
 .chips {
   display: flex;
   gap: 5px;
+  flex-wrap: wrap;
 }
 
 .chip-btn {
   font-family: var(--font-mono);
   font-size: 0.72rem;
   color: var(--muted);
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 4px 10px;
@@ -522,13 +556,13 @@
 }
 
 .chip-btn:hover {
-  color: var(--text);
+  color: var(--blue);
   border-color: var(--dim);
 }
 
 .chip-btn.is-on {
-  color: #1a0d00;
-  background: linear-gradient(135deg, var(--citrus), #ffb657);
+  color: var(--ink);
+  background: linear-gradient(135deg, var(--gold-2), var(--gold));
   border-color: transparent;
   font-weight: 700;
 }
@@ -537,10 +571,11 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 12px 14px;
+  box-shadow: 0 12px 32px -20px rgba(31, 35, 72, 0.35);
 }
 
 .mini-avatar {
@@ -548,8 +583,8 @@
   width: 38px;
   height: 38px;
   border-radius: 13px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 14px -6px rgba(31, 35, 72, 0.5);
+  border: 1px solid rgba(31, 35, 72, 0.14);
 }
 
 .recipient-field {
@@ -584,10 +619,11 @@
   display: flex;
   flex-direction: column;
   gap: 9px;
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 14px 16px;
+  box-shadow: 0 12px 32px -20px rgba(31, 35, 72, 0.25);
 }
 
 .fee-row {
@@ -615,7 +651,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--mint);
+  color: var(--orange);
   font-size: 0.78rem;
 }
 
@@ -625,7 +661,7 @@
 }
 
 .fee-safe {
-  color: var(--mint);
+  color: var(--green);
   font-family: var(--font-mono);
   font-size: 0.8rem;
 }
@@ -641,14 +677,14 @@
   font-size: 1rem;
   padding: 15px;
   border-radius: 16px;
-  color: #1a0d00;
-  background: linear-gradient(135deg, var(--citrus) 0%, #ff7a3d 55%, #ff5f3d 100%);
-  box-shadow: 0 12px 30px -12px rgba(255, 138, 0, 0.6);
+  color: var(--ink);
+  background: linear-gradient(135deg, var(--gold-2) 0%, var(--gold) 55%, var(--gold-3) 100%);
+  box-shadow: 0 12px 28px -14px rgba(216, 138, 0, 0.65);
   transition: transform 0.08s ease, filter 0.15s ease;
 }
 
 .btn-primary:hover {
-  filter: brightness(1.06);
+  filter: brightness(1.05);
 }
 
 .btn-primary:active {
@@ -669,12 +705,12 @@
 
 .btn-secondary {
   width: 100%;
-  border: 1px solid var(--line);
-  color: var(--text);
+  border: 1px solid var(--line-2);
+  color: var(--blue);
   font-size: 0.95rem;
   padding: 13px;
   border-radius: 16px;
-  background: var(--card);
+  background: var(--surface);
 }
 
 .btn-secondary:hover {
@@ -686,10 +722,11 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 22px;
   padding: 18px;
+  box-shadow: 0 12px 32px -20px rgba(31, 35, 72, 0.35);
 }
 
 .review-amount {
@@ -703,6 +740,7 @@
   font-size: 1.7rem;
   font-weight: 700;
   letter-spacing: -0.02em;
+  color: var(--blue);
 }
 
 .review-amount-sub {
@@ -715,10 +753,11 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 16px;
+  box-shadow: 0 12px 32px -20px rgba(31, 35, 72, 0.25);
 }
 
 .review-row {
@@ -744,7 +783,7 @@
 .review-strong svg {
   width: 14px;
   height: 14px;
-  color: var(--citrus);
+  color: var(--orange);
 }
 
 .review-mono {
@@ -782,9 +821,9 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--citrus), #ff5f3d);
-  color: #1a0d00;
-  box-shadow: 0 0 0 6px rgba(255, 138, 0, 0.14), 0 10px 30px rgba(255, 138, 0, 0.35);
+  background: linear-gradient(135deg, var(--gold-2), var(--gold) 60%, var(--gold-3));
+  color: var(--ink);
+  box-shadow: 0 0 0 6px rgba(248, 168, 27, 0.16), 0 10px 30px -10px rgba(216, 138, 0, 0.6);
 }
 
 .orbit-core svg {
@@ -795,7 +834,7 @@
 .orbit-ring {
   position: absolute;
   inset: 0;
-  border: 2px dashed rgba(255, 138, 0, 0.35);
+  border: 2px dashed rgba(248, 168, 27, 0.45);
   border-radius: 50%;
 }
 
@@ -804,7 +843,7 @@
 }
 
 .orbit-ring.orbit-b {
-  border-color: rgba(58, 215, 255, 0.3);
+  border-color: rgba(31, 35, 72, 0.3);
   inset: -10px;
   animation: spin 12s linear infinite reverse;
 }
@@ -813,11 +852,12 @@
   position: absolute;
   font-family: var(--font-mono);
   font-size: 0.6rem;
-  color: var(--text);
+  color: var(--blue);
   padding: 4px 8px;
   border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--card-2);
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  box-shadow: 0 4px 12px -6px rgba(31, 35, 72, 0.4);
   animation: chipDrift 4s ease-in-out infinite alternate;
 }
 
@@ -863,30 +903,30 @@
 }
 
 .status-orb.ok {
-  background: linear-gradient(135deg, var(--mint), #14b881);
-  color: #04231a;
-  box-shadow: 0 0 0 8px rgba(46, 230, 166, 0.12), 0 16px 40px -12px rgba(46, 230, 166, 0.5);
+  background: linear-gradient(135deg, var(--green), #1fae7d);
+  color: #ffffff;
+  box-shadow: 0 0 0 8px rgba(37, 194, 143, 0.14), 0 16px 40px -14px rgba(37, 194, 143, 0.6);
 }
 
 .status-orb.fail {
-  background: linear-gradient(135deg, var(--danger), #e03046);
-  color: #fff;
-  box-shadow: 0 0 0 8px rgba(255, 92, 108, 0.12), 0 16px 40px -12px rgba(255, 92, 108, 0.5);
+  background: linear-gradient(135deg, var(--red), #d92c3e);
+  color: #ffffff;
+  box-shadow: 0 0 0 8px rgba(232, 64, 64, 0.14), 0 16px 40px -14px rgba(232, 64, 64, 0.55);
 }
 
 .status-orb.pending {
-  background: linear-gradient(135deg, var(--amber), #ff7a3d);
-  color: #1a0d00;
-  box-shadow: 0 0 0 8px rgba(255, 194, 77, 0.12);
+  background: linear-gradient(135deg, var(--gold-2), var(--orange));
+  color: var(--ink);
+  box-shadow: 0 0 0 8px rgba(248, 168, 27, 0.16);
   animation: pendingPulse 2s ease-in-out infinite;
 }
 
 @keyframes pendingPulse {
   0%, 100% {
-    box-shadow: 0 0 0 8px rgba(255, 194, 77, 0.1);
+    box-shadow: 0 0 0 8px rgba(248, 168, 27, 0.12);
   }
   50% {
-    box-shadow: 0 0 0 12px rgba(255, 194, 77, 0.22);
+    box-shadow: 0 0 0 12px rgba(248, 168, 27, 0.26);
   }
 }
 
@@ -895,10 +935,11 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 16px;
+  box-shadow: 0 12px 32px -20px rgba(31, 35, 72, 0.25);
 }
 
 .card-label {
@@ -914,7 +955,7 @@
   gap: 8px;
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: var(--mint);
+  color: var(--green);
   word-break: break-all;
   line-height: 1.5;
 }
@@ -927,7 +968,7 @@
 }
 
 .tx-link {
-  color: var(--sky);
+  color: var(--blue);
   font-size: 1rem;
 }
 
@@ -939,9 +980,9 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  border: 1px solid rgba(255, 194, 77, 0.4);
-  background: rgba(255, 194, 77, 0.08);
-  color: var(--amber);
+  border: 1px solid rgba(232, 118, 43, 0.4);
+  background: rgba(232, 118, 43, 0.08);
+  color: var(--orange);
   border-radius: 14px;
   padding: 12px 14px;
   font-size: 0.84rem;
@@ -960,7 +1001,7 @@
   margin: 0 auto;
   border-radius: 50%;
   border: 3px solid var(--line);
-  border-top-color: var(--citrus);
+  border-top-color: var(--gold);
   animation: spin 0.9s linear infinite;
 }
 
@@ -982,14 +1023,15 @@
   font-size: 1.6rem;
   font-weight: 700;
   border-radius: 50%;
-  background: var(--card);
-  border: 1.5px solid var(--danger);
-  color: var(--danger);
+  background: var(--surface);
+  border: 1.5px solid var(--red);
+  color: var(--red);
 }
 
 .fatal-title {
   font-size: 1.35rem;
   font-weight: 700;
+  color: var(--blue);
 }
 
 .fatal-text {
@@ -999,11 +1041,11 @@
 }
 
 .error-message {
-  color: var(--danger);
+  color: var(--red);
   font-size: 0.88rem;
   word-break: break-word;
-  border: 1px solid rgba(255, 92, 108, 0.3);
-  background: rgba(255, 92, 108, 0.07);
+  border: 1px solid rgba(232, 64, 64, 0.3);
+  background: rgba(232, 64, 64, 0.07);
   border-radius: 12px;
   padding: 10px 12px;
 }
@@ -1026,6 +1068,7 @@
   border-radius: 50%;
   font-weight: 700;
   position: relative;
+  color: var(--ink);
 }
 
 .orb::before {
@@ -1033,34 +1076,31 @@
   position: absolute;
   inset: -3px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(31, 35, 72, 0.16);
 }
 
 .orb.sm {
   width: 30px;
   height: 30px;
   font-size: 0.82rem;
-  background: radial-gradient(circle at 32% 26%, #5cf0bb, #1fbf8f 62%, #128a68);
-  color: #04231a;
-  box-shadow: 0 4px 14px rgba(46, 230, 166, 0.35);
+  background: radial-gradient(circle at 32% 26%, var(--gold-2), var(--gold) 62%, var(--gold-3));
+  box-shadow: 0 4px 14px -6px rgba(216, 138, 0, 0.6);
 }
 
 .orb.md {
   width: 42px;
   height: 42px;
   font-size: 1.05rem;
-  background: radial-gradient(circle at 32% 26%, #7ae9ff, #2ec6e8 60%, #1a8faf);
-  color: #042131;
-  box-shadow: 0 6px 20px rgba(58, 215, 255, 0.4);
+  background: radial-gradient(circle at 32% 26%, var(--gold-2), var(--gold) 60%, var(--gold-3));
+  box-shadow: 0 6px 20px -8px rgba(216, 138, 0, 0.6);
 }
 
 .orb.lg {
   width: 58px;
   height: 58px;
   font-size: 1.35rem;
-  background: radial-gradient(circle at 32% 26%, #ffd27a, var(--citrus) 58%, #d96710);
-  color: #210f00;
-  box-shadow: 0 10px 30px -8px rgba(255, 138, 0, 0.6);
+  background: radial-gradient(circle at 32% 26%, var(--gold-2), var(--gold) 58%, var(--gold-3));
+  box-shadow: 0 10px 30px -10px rgba(216, 138, 0, 0.6);
 }
 
 /* ── Phase card (signing steps) ── */
@@ -1068,10 +1108,11 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 16px;
+  box-shadow: 0 12px 32px -20px rgba(31, 35, 72, 0.25);
 }
 
 .phase {
@@ -1088,8 +1129,8 @@
   border-radius: 50%;
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  border: 1.5px solid var(--line);
-  color: var(--muted);
+  border: 1.5px solid var(--line-2);
+  color: var(--dim);
 }
 
 .phase-dot svg {
@@ -1098,14 +1139,14 @@
 }
 
 .phase.done .phase-dot {
-  background: linear-gradient(135deg, var(--mint), #14b881);
+  background: linear-gradient(135deg, var(--green), #1fae7d);
   border-color: transparent;
-  color: #04231a;
+  color: #ffffff;
 }
 
 .phase.pulse .phase-dot {
-  border-color: var(--citrus);
-  color: var(--citrus);
+  border-color: var(--gold);
+  color: var(--gold-3);
   animation: pendingPulse 1.6s ease-in-out infinite;
 }
 

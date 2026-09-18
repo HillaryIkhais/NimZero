@@ -84,11 +84,36 @@ function explorerTxUrl(cfg: ChainConfig, txHash: string): string {
   return `${cfg.explorerUrl}/tx/${txHash}`
 }
 
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // fall through to legacy copy
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.setAttribute('readonly', '')
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
+}
+
 function avatarFor(address: string): string {
   const hex = address.replace(/^0x/, '').padEnd(40, '0')
   let seed = 0
   for (let i = 0; i < 6; i++) seed = (seed * 31 + hex.charCodeAt(i * 2)) % 360
-  return `conic-gradient(from ${seed}deg, #ff8a00, #ff5f3d 45%, #8b7bff 70%, #3ad7ff)`
+  return `conic-gradient(from ${seed}deg, #f8a81b, #e8762b 45%, #1f2348 70%, #25c28f)`
 }
 
 function App() {
@@ -566,6 +591,20 @@ function WalletCard({
   onConnect?: () => void
 }) {
   const connected = wallet.connected
+  const [full, setFull] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const toggleAddress = async () => {
+    if (full) return
+    if (!wallet.address) return
+    setFull(true)
+    const ok = await copyText(wallet.address)
+    if (ok) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    }
+  }
+
   return (
     <section className={`wallet-card ${connected ? 'is-connected' : ''}`}>
       <div className="wallet-aurora" aria-hidden="true" />
@@ -574,7 +613,19 @@ function WalletCard({
           <TokenOrb token={cfg.tokenSymbol} size="sm" />
           <span className="wallet-name">NimZero Pay</span>
         </div>
-        <span className="chip-mono">{connected ? shortAddress(wallet.address) : 'no wallet'}</span>
+        {connected ? (
+          <button
+            className={`chip-mono addr-chip ${full ? 'is-full' : ''}`}
+            onClick={toggleAddress}
+            aria-expanded={full}
+            title={full ? wallet.address : 'Tap to reveal your full address'}
+          >
+            {full ? wallet.address : shortAddress(wallet.address)}
+            <span className="addr-copy">{copied ? <CheckIcon /> : <CopyIcon />}</span>
+          </button>
+        ) : (
+          <span className="chip-mono">no wallet</span>
+        )}
       </div>
 
       <div className="chip-row">
@@ -925,6 +976,15 @@ function SendIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 4 5 19l7-3.2L19 19 12 4z" />
+    </svg>
+  )
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="9" y="9" width="11" height="11" rx="2.5" />
+      <path d="M5 15H4.5A2.5 2.5 0 0 1 2 12.5v-8A2.5 2.5 0 0 1 4.5 2h8A2.5 2.5 0 0 1 15 4.5V5" />
     </svg>
   )
 }

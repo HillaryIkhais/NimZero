@@ -1,19 +1,24 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 
 :root {
-  --bg: #060a13;
-  --card: #101829;
-  --card-2: #141d33;
-  --line: #1e2b47;
-  --text: #f4f7ff;
-  --muted: #8d99b8;
-  --dim: #5b6888;
-  --citrus: #ff8a00;
-  --mint: #2ee6a6;
-  --sky: #3ad7ff;
-  --violet: #8b7bff;
-  --danger: #ff5c6c;
-  --amber: #ffc24d;
+  --gold: #f8a81b;
+  --gold-2: #ffc24d;
+  --gold-3: #d98a00;
+  --ink: #1f2348;
+  --ink-2: #333769;
+  --blue: #1f2348;
+  --green: #25c28f;
+  --red: #e84040;
+  --orange: #e8762b;
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --card: #ffffff;
+  --card-2: #f0f2f9;
+  --line: #e4e7f0;
+  --line-2: #d4d9e8;
+  --text: #1f2348;
+  --muted: #6e7691;
+  --dim: #98a0b8;
   --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
   --font-mono: 'Space Mono', ui-monospace, monospace;
 }
@@ -32,9 +37,9 @@ html {
 body {
   font-family: var(--font-sans);
   background:
-    radial-gradient(760px 420px at 12% -8%, rgba(58, 215, 255, 0.12), transparent 62%),
-    radial-gradient(700px 460px at 100% 0%, rgba(255, 138, 0, 0.12), transparent 60%),
-    radial-gradient(900px 600px at 50% 120%, rgba(139, 123, 255, 0.1), transparent 62%),
+    radial-gradient(760px 420px at 12% -8%, rgba(248, 168, 27, 0.1), transparent 62%),
+    radial-gradient(700px 460px at 100% 0%, rgba(31, 35, 72, 0.07), transparent 60%),
+    radial-gradient(900px 600px at 50% 120%, rgba(51, 55, 105, 0.08), transparent 62%),
     var(--bg);
   color: var(--text);
   line-height: 1.5;
@@ -47,8 +52,8 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    linear-gradient(rgba(31, 35, 72, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 35, 72, 0.035) 1px, transparent 1px);
   background-size: 42px 42px;
   mask-image: radial-gradient(80% 60% at 50% 0%, #000 0%, transparent 90%);
 }
@@ -66,10 +71,10 @@ button {
 }
 
 a {
-  color: var(--sky);
+  color: var(--blue);
 }
 
 ::selection {
-  background: var(--citrus);
-  color: #1a0d00;
+  background: var(--gold);
+  color: var(--ink);
 }
