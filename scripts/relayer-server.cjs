@@ -14,7 +14,8 @@ const { JsonRpcProvider, Wallet } = require('ethers')
 const {
   USDT0_TOKEN,
   RELAY_EVENT_ABI,
-  MAINNET_CHAIN
+  MAINNET_CHAIN,
+  submitRelay
 } = require('../build/.pipeline/submit-relay.js')
 
 const PORT = Number(process.env.PORT || 8787)
@@ -134,7 +135,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const result = await submitRelay(
         { intent, authorization: auth },
-        { provider, relayWallet, relayAddress: RELAY, chain: chainConfig }
+        { provider, relayWallet: relayerWallet, relayAddress: RELAY, chain: chainConfig }
       )
       if (!result.success) {
         return json(res, 422, { status: 'FAILED', error: result.error })

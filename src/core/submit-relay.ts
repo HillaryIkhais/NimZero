@@ -246,6 +246,8 @@ const RELAY_EVENT_ABI = [
   'event RelayExecuted(address indexed from, address indexed to, uint256 amount, uint256 relayNonce)'
 ]
 
+export { USDT0_TOKEN, RELAY_EVENT_ABI }
+
 export async function verifyTransaction(
   provider: Provider,
   txHash: string,
