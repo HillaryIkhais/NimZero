@@ -13,10 +13,11 @@ plan: free
 region: oregon
 
 services:
-  - type: web
+  - type: web_service
     name: zero-relayer
     runtime: node
     plan: free
+    region: oregon
     buildCommand: npm ci && npm run relay:build
     startCommand: node scripts/relayer-server.cjs
     healthCheckPath: /api/config
@@ -24,7 +25,7 @@ services:
     autoDeploy: false
     pullRequestPreviewsEnabled: false
     envVars:
-      # ── Node 20+ (Render default is fine) ──
+      # ── Node build: install devDeps so `tsc` can compile build/.pipeline ──
       - key: NPM_CONFIG_PRODUCTION
         value: "false"
       # ── Demo/testnet config. Replace RELAY + ZERO_TOKEN with the real
