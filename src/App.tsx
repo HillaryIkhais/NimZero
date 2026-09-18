@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BrowserProvider, Contract, Wallet } from 'ethers'
+import { BrowserProvider, Contract, Wallet, verifyTypedData } from 'ethers'
 import type { Signer } from 'ethers'
 import { createPaymentIntent } from './core/payment-intent'
 import {
   RELAY_ORDER_TYPES,
   USDT0_PERMIT_TYPES,
   relayDomain,
-  usdt0PermitDomain
+  usdt0PermitDomain,
+  recoverPermitSigner,
+  recoverRelayOrderSigner
 } from './core/relayer'
 import './App.css'
 
@@ -162,42 +164,148 @@ async function signTypedDataResilient(params: {
   message: Record<string, unknown>
 }): Promise<string> {
   const { signer, provider, address, domain, types, message } = params
+
+  // Augment types with EIP712Domain declaration matching this domain.
+  // Some wallets (including Nimiq Pay's EVM provider) require EIP712Domain
+  // to be present in `types` even though primaryType is never 'EIP712Domain'.
+  const domainName = domain.name
+  const domainVersion = domain.version
+  const verifyingContract = domain.verifyingContract
+  let eip712DomainTypes: Array<{ name: string; type: string }> = []
+  if (domainName === 'USDT0' && domainVersion === '1' && domain.salt !== undefined) {
+    // Permit-domain style: name/version/verifyingContract/salt
+    eip712DomainTypes = [
+      { name: 'name', type: 'string' },
+      { name: 'version', type: 'string' },
+      { name: 'verifyingContract', type: 'address' },
+      { name: 'salt', type: 'bytes32' }
+    ]
+  } else if (
+    domainName === 'ZeroPayRelay' && domainVersion === '1' && typeof domain.chainId === 'number'
+  ) {
+    // Relay-domain style: name/version/chainId/verifyingContract
+    eip712DomainTypes = [
+      { name: 'name', type: 'string' },
+      { name: 'version', type: 'string' },
+      { name: 'chainId', type: 'uint256' },
+      { name: 'verifyingContract', type: 'address' }
+    ]
+  }
+  const augmentedTypes = {
+    ...types,
+    EIP712Domain: eip712DomainTypes
+  }
+
   const typedPayload = {
-    types,
-    primaryType: Object.keys(types)[0],
+    types: augmentedTypes,
+    primaryType: Object.keys(augmentedTypes)[0],
     domain: jsonSafe(domain),
     message: jsonSafe(message)
   }
-  const attempts: Array<() => Promise<string>> = [
-    () => signer.signTypedData(domain, types, message),
-    async () => {
-      if (!provider) throw new Error('EVM provider unavailable')
-      const sig = (await provider.send('eth_signTypedData_v4', [address, JSON.stringify(typedPayload)])) as string
-      if (!sig) throw new Error('wallet returned an empty signature')
-      return sig
-    },
-    async () => {
-      if (!provider) throw new Error('EVM provider unavailable')
-      const sig = (await provider.send('eth_signTypedData', [address, typedPayload])) as string
-      if (!sig) throw new Error('wallet returned an empty signature')
-      return sig
-    },
-    async () => {
-      if (!provider) throw new Error('EVM provider unavailable')
-      const sig = (await provider.send('wallet_signTypedData', [address, typedPayload])) as string
-      if (!sig) throw new Error('wallet returned an empty signature')
-      return sig
+
+  const attemptLogs: string[] = []
+
+  // ── Attempt 0: raw documented Nimiq Pay eth_signTypedData_v4 via window.ethereum.request ──
+  attemptLogs.push('attempt-0:window.ethereum.request(eth_signTypedData_v4)')
+  try {
+    if (!window.ethereum) throw new Error('Ethereum provider unavailable')
+    const sig = await window.ethereum.request({
+      method: 'eth_signTypedData_v4',
+      params: [address, JSON.stringify(typedPayload)]
+    }) as string
+    if (!sig) throw new Error('wallet returned empty signature')
+    // Verify the signature recovers to the connected address using ethers verifyTypedData
+    const recovered = verifyTypedData(augmentedTypes, domain, typedPayload.message as any, sig)
+    if (recovered.toLowerCase() !== address.toLowerCase()) {
+      throw new Error(`Signature recovery failed: got ${recovered}, expected ${address}`)
     }
-  ]
-  let lastError: unknown = null
-  for (const attempt of attempts) {
-    try {
-      return await attempt()
-    } catch (err) {
-      lastError = err
-    }
+    setSigningLog((prev) => [...prev, ...attemptLogs, '✓ attempt-0 succeeded (raw v4)'])
+    return sig
+  } catch (err: any) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    attemptLogs.push(`✗ attempt-0 failed: ${errMsg}`)
+    setSigningLog((prev) => [...prev, ...attemptLogs])
+    // fall through to next attempt
   }
-  throw lastError instanceof Error ? lastError : new Error('The wallet did not return a signature.')
+
+  // ── Attempt 1: ethers JsonRpcSigner.signTypedData ──
+  attemptLogs.push('attempt-1:ethers.JsonRpcSigner.signTypedData')
+  try {
+    const sig = await signer.signTypedData(domain, augmentedTypes, typedPayload.message as any)
+    if (!sig) throw new Error('wallet returned empty signature')
+    const recovered = verifyTypedData(augmentedTypes, domain, typedPayload.message as any, sig)
+    if (recovered.toLowerCase() !== address.toLowerCase()) {
+      throw new Error(`Signature recovery failed: got ${recovered}, expected ${address}`)
+    }
+    setSigningLog((prev) => [...prev, ...attemptLogs, '✓ attempt-1 succeeded (ethers)'])
+    return sig
+  } catch (err: any) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    attemptLogs.push(`✗ attempt-1 failed: ${errMsg}`)
+    setSigningLog((prev) => [...prev, ...attemptLogs])
+  }
+
+  // ── Attempt 2: provider.send('eth_signTypedData_v4', ...) ──
+  attemptLogs.push('attempt-2:provider.send(eth_signTypedData_v4)')
+  try {
+    if (!provider) throw new Error('EVM provider unavailable')
+    const sig = await provider.send('eth_signTypedData_v4', [
+      address,
+      JSON.stringify(typedPayload)
+    ]) as string
+    if (!sig) throw new Error('wallet returned empty signature')
+    const recovered = verifyTypedData(augmentedTypes, domain, typedPayload.message as any, sig)
+    if (recovered.toLowerCase() !== address.toLowerCase()) {
+      throw new Error(`Signature recovery failed: got ${recovered}, expected ${address}`)
+    }
+    setSigningLog((prev) => [...prev, ...attemptLogs, '✓ attempt-2 succeeded (provider.send v4)'])
+    return sig
+  } catch (err: any) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    attemptLogs.push(`✗ attempt-2 failed: ${errMsg}`)
+    setSigningLog((prev) => [...prev, ...attemptLogs])
+  }
+
+  // ── Attempt 3: provider.send('eth_signTypedData', ...) (older format) ──
+  attemptLogs.push('attempt-3:provider.send(eth_signTypedData)')
+  try {
+    if (!provider) throw new Error('EVM provider unavailable')
+    const sig = await provider.send('eth_signTypedData', [address, typedPayload]) as string
+    if (!sig) throw new Error('wallet returned empty signature')
+    const recovered = verifyTypedData(augmentedTypes, domain, typedPayload.message as any, sig)
+    if (recovered.toLowerCase() !== address.toLowerCase()) {
+      throw new Error(`Signature recovery failed: got ${recovered}, expected ${address}`)
+    }
+    setSigningLog((prev) => [...prev, ...attemptLogs, '✓ attempt-3 succeeded (provider.send v3)'])
+    return sig
+  } catch (err: any) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    attemptLogs.push(`✗ attempt-3 failed: ${errMsg}`)
+    setSigningLog((prev) => [...prev, ...attemptLogs])
+  }
+
+  // ── Attempt 4: wallet_signTypedData ──
+  attemptLogs.push('attempt-4:wallet_signTypedData')
+  try {
+    if (!provider) throw new Error('EVM provider unavailable')
+    const sig = await provider.send('wallet_signTypedData', [address, typedPayload]) as string
+    if (!sig) throw new Error('wallet returned empty signature')
+    const recovered = verifyTypedData(augmentedTypes, domain, typedPayload.message as any, sig)
+    if (recovered.toLowerCase() !== address.toLowerCase()) {
+      throw new Error(`Signature recovery failed: got ${recovered}, expected ${address}`)
+    }
+    setSigningLog((prev) => [...prev, ...attemptLogs, '✓ attempt-4 succeeded (wallet_signTypedData)'])
+    return sig
+  } catch (err: any) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    attemptLogs.push(`✗ attempt-4 failed: ${errMsg}`)
+    setSigningLog((prev) => [...prev, ...attemptLogs])
+  }
+
+  throw new Error(
+    'The wallet did not return a valid EIP-712 signature.\n' +
+      attemptLogs.map((l, i) => `${i + 1}. ${l}`).join('\n')
+  )
 }
 
 function App() {
@@ -217,6 +325,12 @@ function App() {
   const [receipt, setReceipt] = useState<ReceiptInfo | null>(null)
   const [verification, setVerification] = useState<string[]>([])
   const [demo, setDemo] = useState<Signer | null>(null)
+const [signingLog, setSigningLog] = useState<string[]>([])
+const [providerInfo, setProviderInfo] = useState<{
+  ethereumKeys: string[]
+  chainId?: string
+  netVersion?: string
+}>({ ethereumKeys: [], chainId: undefined, netVersion: undefined })
 
   const tokenWei = useMemo(
     () => (cfg ? toTokenWei(amount, cfg.tokenDecimals) : 0n),
@@ -228,6 +342,23 @@ function App() {
       .then(setCfg)
       .catch((err) => setConfigError(err instanceof Error ? err.message : String(err)))
   }, [])
+
+  useEffect(() => {
+    if (!window.ethereum) return
+    const detectProvider = async () => {
+      const keys = Object.keys(window.ethereum)
+      let chainId: string | undefined
+      let netVersion: string | undefined
+      try {
+        chainId = (await window.ethereum.request({ method: 'eth_chainId' })) as string
+      } catch (e) {}
+      try {
+        netVersion = (await window.ethereum.request({ method: 'net_version' })) as string
+      } catch (e) {}
+      setProviderInfo({ ethereumKeys: keys, chainId, netVersion })
+    }
+    detectProvider()
+  }, [cfg])
 
   const switchChain = useCallback(async (p: BrowserProvider, c: ChainConfig) => {
     try {
@@ -309,8 +440,7 @@ function App() {
         })
     }
   }, [cfg, provider, refreshBalances, switchChain, demo])
-
-  async function signAndSubmit(info: ReviewInfo) {
+async function signAndSubmit(info: ReviewInfo) {
     if (!cfg || !wallet.address) throw new Error('Wallet not connected')
     setVerification([])
 
@@ -358,8 +488,10 @@ function App() {
       nonce: BigInt(intent.nonce)
     }
 
-    const [permitSignature, relaySignature] = await Promise.all([
-      signTypedDataResilient({
+    // ── Step 1: Sign the EIP-712 Permit (relayer spender) ──
+    setSigningLog((prev) => [...prev, 'Step 1/2: Signing Permit for relayer in Nimiq Pay'])
+    try {
+      const permitSignature = await signTypedDataResilient({
         signer,
         provider,
         address: wallet.address,
@@ -371,8 +503,25 @@ function App() {
         }),
         types: USDT0_PERMIT_TYPES,
         message: permitMessage as Record<string, unknown>
-      }),
-      signTypedDataResilient({
+      })
+      setSigningLog((prev) => [...prev, '✓ Permit signature obtained'])
+    } catch (err: any) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      setSigningLog((prev) => [...prev, `✗ Permit signing failed: ${errMsg}`])
+      setReceipt({
+        status: 'failed',
+        txHash: '',
+        title: 'Payment not sent',
+        message: `Permit signature failed: ${errMsg}. Connect your Nimiq Pay wallet and try again.`
+      })
+      setScreen('receipt')
+      return
+    }
+
+    // ── Step 2: Sign the EIP-712 Relay Order (recipient payment) ──
+    setSigningLog((prev) => [...prev, 'Step 2/2: Signing Relay order in Nimiq Pay'])
+    try {
+      const relaySignature = await signTypedDataResilient({
         signer,
         provider,
         address: wallet.address,
@@ -380,7 +529,19 @@ function App() {
         types: RELAY_ORDER_TYPES,
         message: orderMessage as Record<string, unknown>
       })
-    ])
+      setSigningLog((prev) => [...prev, '✓ Relay order signature obtained'])
+    } catch (err: any) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      setSigningLog((prev) => [...prev, `✗ Relay order signing failed: ${errMsg}`])
+      setReceipt({
+        status: 'failed',
+        txHash: '',
+        title: 'Payment not sent',
+        message: `Relay order signature failed: ${errMsg}. Connect your Nimiq Pay wallet and try again.`
+      })
+      setScreen('receipt')
+      return
+    }
 
     if (demo) {
       setVerification((v) => [
@@ -462,7 +623,6 @@ function App() {
     }
     throw new Error(body.error ?? `Unexpected relayer response (${res.status})`)
   }
-
   async function pollVerification(txHash: string) {
     if (!cfg) return
     const started = Date.now()
@@ -626,21 +786,22 @@ function App() {
         )}
 
         {screen === 'review' && review && (
-          <ReviewScreen
-            cfg={cfg}
-            review={review}
-            demo={!!demo}
-            onBack={() => setScreen('home')}
-            onConfirm={confirmPayment}
-          />
+<ReviewScreen
+              cfg={cfg}
+              review={review}
+              demo={!!demo}
+              onBack={() => setScreen('home')}
+              onConfirm={confirmPayment}
+              signingLog={signingLog}
+            />
         )}
 
         {screen === 'signing' && (
-          <SigningScreen cfg={cfg} verification={verification} />
+          <SigningScreen cfg={cfg} verification={verification} signingLog={signingLog} />
         )}
 
         {screen === 'receipt' && (
-          <ReceiptScreen cfg={cfg} receipt={receipt} verification={verification} onReset={reset} />
+          <ReceiptScreen cfg={cfg} receipt={receipt} verification={verification} onReset={reset} signingLog={signingLog} />
         )}
       </main>
       <footer className="footer">
@@ -1165,6 +1326,31 @@ function SigningScreen(props: { cfg: ChainConfig; verification: string[] }) {
         ))}
       </section>
 
+      <section className="diagnostics-card">
+        <div className="card-label">Provider</div>
+        <div className="diagnostics-row">
+          <span className="diag-key">Chain</span>
+          <span className="diag-value">{cfg.chainId !== 137 ? cfg.network : 'Ethereum Mainnet'}</span>
+        </div>
+        <div className="diagnostics-row">
+          <span className="diag-key">Methods</span>
+          <span className="diag-value">{providerInfo.ethereumKeys.slice(0, 3).join(', ')}{providerInfo.ethereumKeys.length > 3 ? '…' : ''}</span>
+        </div>
+        {cfg.chainId && <div className="diagnostics-row"><span className="diag-key">Chain ID</span><span className="diag-value">0x{cfg.chainId.toString(16)}</span></div>}
+        {cfg.netVersion && <div className="diagnostics-row"><span className="diag-key">Net Version</span><span className="diag-value">{cfg.netVersion}</span></div>}
+      </section>
+
+      {signingLog.length > 0 && (
+        <section className="form-card">
+          <div className="card-label">Signing log</div>
+          {signingLog.map((line, i) => (
+            <div key={i} className="verification-line">
+              <CheckIcon className="small-icon" /> {line}
+            </div>
+          ))}
+        </section>
+      )}
+
       {verification.length > 0 && (
         <section className="form-card">
           <div className="card-label">Relayer activity</div>
@@ -1184,7 +1370,9 @@ function ReceiptScreen(props: {
   receipt: ReceiptInfo | null
   verification: string[]
   onReset: () => void
+  signingLog?: string[]
 }) {
+  const { cfg, receipt, verification, onReset, signingLog } = props
   const { cfg, receipt, verification, onReset } = props
   if (!receipt) return null
   const verified = receipt.status === 'verified'
@@ -1211,6 +1399,17 @@ function ReceiptScreen(props: {
           >
             {receipt.txHash.slice(0, 10)}…{receipt.txHash.slice(-8)} ↗
           </a>
+        </section>
+      )}
+
+      {signingLog && signingLog.length > 0 && (
+        <section className="form-card">
+          <div className="card-label">Signing diagnostics</div>
+          {signingLog.map((line, i) => (
+            <div key={i} className="verification-line">
+              <CheckIcon className="small-icon" /> {line}
+            </div>
+          ))}
         </section>
       )}
 
