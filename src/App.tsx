@@ -11,9 +11,9 @@ import {
 import './App.css'
 
 // ─────────────────────────────────────────────────────────────────────
-// NimZero — Pay USDT on Polygon without POL.
+// NimZero — Pay USDT with $0 gas.
 // A gasless USDT payment: the user signs (Permit + RelayOrder), a funded
-// relayer sponsors the settlement transaction on Polygon, and NimZero
+// relayer sponsors the settlement transaction, and NimZero
 // independently verifies the result on-chain before showing a receipt.
 // ─────────────────────────────────────────────────────────────────────
 
@@ -418,7 +418,7 @@ function App() {
     const checks: string[] = []
     try {
       const pol = await provider.getBalance(wallet.address)
-      checks.push(`User POL ${fromTokenWei(pol, 18)} (gas was sponsored — not charged to the user)`)
+      checks.push(`User gas ${fromTokenWei(pol, 18)} (gas was sponsored — not charged to the user)`)
     } catch {
       /* ignore balance read failures in proof capture */
     }
@@ -555,7 +555,7 @@ function App() {
         )}
       </main>
       <footer className="footer">
-        <span>You never touched POL to do it.</span>
+        <span>You never touched gas to do it.</span>
       </footer>
     </div>
   )
@@ -708,7 +708,7 @@ function HomeScreen(props: {
 
               <div className="sponsor-strip">
                 <span className="sponsor-bolt"><BoltIcon /></span>
-                <span>Gas paid for you — 0 POL needed</span>
+                <span>Gas sponsored by NimZero — ETH required: 0</span>
               </div>
             </div>
           </section>
@@ -767,7 +767,7 @@ function HomeScreen(props: {
             </div>
             <div className="stat-card">
               <span className="stat-value">0.00</span>
-              <span className="stat-label">POL spent by you</span>
+              <span className="stat-label">ETH required</span>
             </div>
             <div className="stat-card">
               <span className="stat-value">1</span>
@@ -779,7 +779,7 @@ function HomeScreen(props: {
             </div>
           </div>
           <div className="warn-note">
-            <BoltIcon /> The NimZero relayer sponsors every settlement. Your POL balance stays untouched.
+            <BoltIcon /> The NimZero relayer sponsors every settlement. Your gas stays untouched — ETH required: 0.
           </div>
         </section>
       )}
@@ -837,7 +837,7 @@ function HomeScreen(props: {
                   </button>
                 </div>
                 <p className="muted">
-                  You pay {cfg.tokenSymbol} on {cfg.network} without holding POL. You sign one authorization,
+                  Send {cfg.tokenSymbol} on {cfg.network} without holding gas. You sign one authorization,
                   and the NimZero relayer sponsors the gas and settles it in a single transaction.
                 </p>
                 <div className="warn-note">
@@ -894,7 +894,7 @@ function PayScreen(props: {
   onContinue: () => void
   onBack: () => void
 }) {
-  const { cfg, wallet, recipient, amount, configError, onRecipient, onAmount, onContinue, onBack } = props
+  const { cfg, recipient, amount, configError, onRecipient, onAmount, onContinue, onBack } = props
   const chips = ['5', '10', '25', '50', '100']
   return (
     <div className="screen">
@@ -905,9 +905,9 @@ function PayScreen(props: {
       <section className="hero">
         <p className="kicker">GASLESS PAYMENT</p>
         <h1 className="hero-title">
-          Send {cfg.tokenSymbol} <span className="ink">— pay zero POL.</span>
+          Send {cfg.tokenSymbol} <span className="ink">— pay zero gas.</span>
         </h1>
-        <p className="hero-sub">Fee is $0.00 and sponsored. Your POL balance is never charged.</p>
+        <p className="hero-sub">Network fee: $0. Gas sponsored by NimZero. ETH required: 0.</p>
       </section>
 
       <div className="amount-edit">
@@ -963,8 +963,8 @@ function PayScreen(props: {
           </span>
         </div>
         <div className="fee-row">
-          <span>Your POL</span>
-          <span className="fee-safe">{wallet.pol} · untouched</span>
+          <span>ETH required</span>
+          <span className="fee-safe">0 · untouched</span>
         </div>
         <div className="fee-row">
           <span>Settlement</span>
@@ -977,7 +977,7 @@ function PayScreen(props: {
       <button className="btn-primary btn-send" onClick={onContinue}>
         Review payment <SendIcon />
       </button>
-      <p className="tiny-note">You sign one authorization. No POL is ever taken from your wallet.</p>
+      <p className="tiny-note">You sign one authorization. No gas is ever taken from your wallet.</p>
     </div>
   )
 }
@@ -994,7 +994,7 @@ function ReviewScreen(props: {
       <section className="hero compact">
         <p className="kicker">REVIEW</p>
         <h1 className="hero-title">One authorization.</h1>
-        <p className="hero-sub">Signed in your wallet, settled by the relayer — zero POL for you.</p>
+        <p className="hero-sub">Signed in your wallet, settled by the relayer — zero gas for you.</p>
       </section>
 
       <section className="review-hero">
@@ -1023,8 +1023,8 @@ function ReviewScreen(props: {
           <span className="review-strong"><BoltIcon /> NimZero relayer</span>
         </div>
         <div className="review-row">
-          <span>Your POL balance</span>
-          <span>unchanged</span>
+          <span>Your ETH balance</span>
+          <span>unchanged · 0 required</span>
         </div>
       </section>
 
@@ -1035,7 +1035,7 @@ function ReviewScreen(props: {
         <WalletIcon /> Authorize in wallet
       </button>
       <p className="tiny-note">
-        You'll sign one authorization in Nimiq Pay. No POL is taken from your wallet — ever.
+        You'll sign one authorization in Nimiq Pay. No gas is taken from your wallet — ever.
       </p>
     </div>
   )
@@ -1056,7 +1056,7 @@ function SigningScreen(props: { cfg: ChainConfig; verification: string[] }) {
         <div className="orbit-ring orbit-b" />
         <div className="orbit-core"><BoltIcon /></div>
         <span className="orbit-chip chip-a">{cfg.tokenSymbol}</span>
-        <span className="orbit-chip chip-b">0 POL</span>
+        <span className="orbit-chip chip-b">0 ETH</span>
       </div>
 
       <p className="muted center">
