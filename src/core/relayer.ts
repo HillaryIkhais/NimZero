@@ -12,25 +12,36 @@ export const USDT0_DOMAIN_SEPARATOR = '0x7b43b7deae87806d0ace67d6c8e9e347fc85db8
 
 // The USDT0 token (UChildUSDT0) uses a NON-STANDARD EIP-712 domain:
 //   EIP712Domain(string name,string version,address verifyingContract,bytes32 salt)
-//   chainId is NOT a domain field — it lives in the salt slot.
+//   chainId is NOT a domain field — it lives in the salt slot. A testnet mirror
+//   token uses the same construction (salt = bytes32(chainId)).
 // This object is exactly what the wallet signs via eth_signTypedData_v4.
-export function usdt0PermitDomain(chainId: number = POLYGON_CHAIN_ID): {
+export function usdt0PermitDomain(
+  chainId: number = POLYGON_CHAIN_ID,
+  opts: { token?: string; name?: string; version?: string; saltSlot?: boolean } = {}
+): {
   name: string
   version: string
   verifyingContract: string
-  salt: string
+  chainId?: number
+  salt?: string
 } {
-  return {
-    name: USDT0_NAME,
-    version: USDT0_VERSION,
-    verifyingContract: USDT0_TOKEN,
-    salt: zeroPadValue(toBeHex(chainId), 32)
+  const base = {
+    name: opts.name ?? USDT0_NAME,
+    version: opts.version ?? USDT0_VERSION,
+    verifyingContract: opts.token ?? USDT0_TOKEN
   }
+  if (opts.saltSlot === false) {
+    return { ...base, chainId }
+  }
+  return { ...base, salt: zeroPadValue(toBeHex(chainId), 32) }
 }
 
 // Reproduce the token's on-chain domainSeparator for sanity checks.
-export function computeUsdt0DomainSeparator(chainId: number = POLYGON_CHAIN_ID): string {
-  return TypedDataEncoder.hashDomain(usdt0PermitDomain(chainId))
+export function computeUsdt0DomainSeparator(
+  chainId: number = POLYGON_CHAIN_ID,
+  context: PermitContext = { token: USDT0_TOKEN }
+): string {
+  return TypedDataEncoder.hashDomain(usdt0PermitDomain(chainId, context))
 }
 
 export const USDT0_PERMIT_TYPES = {
@@ -77,8 +88,20 @@ export function relayDomainSeparator(relayAddress: string, chainId: number = POL
   return TypedDataEncoder.hashDomain(relayDomain(relayAddress, chainId))
 }
 
-export function recoverPermitSigner(message: PermitMessage, signature: string, chainId: number = POLYGON_CHAIN_ID): string {
-  return verifyTypedData(usdt0PermitDomain(chainId), USDT0_PERMIT_TYPES, message, signature)
+export interface PermitContext {
+  token: string
+  name?: string
+  version?: string
+  saltSlot?: boolean
+}
+
+export function recoverPermitSigner(
+  message: PermitMessage,
+  signature: string,
+  chainId: number = POLYGON_CHAIN_ID,
+  context: PermitContext = { token: USDT0_TOKEN }
+): string {
+  return verifyTypedData(usdt0PermitDomain(chainId, context), USDT0_PERMIT_TYPES, message, signature)
 }
 
 export function recoverRelayOrderSigner(message: RelayOrderMessage, signature: string, relayAddress: string, chainId: number = POLYGON_CHAIN_ID): string {
@@ -108,9 +131,10 @@ export function createSignedAuthorization(
   wallet: Signer,
   relayAddress: string,
   tokenNonce: bigint,
-  options: { chainId?: number; deadline?: bigint; recipient?: string; amountWei?: bigint } = {}
+  options: { chainId?: number; deadline?: bigint; recipient?: string; amountWei?: bigint; ctx?: PermitContext } = {}
 ): Promise<SignedAuthorization> {
   const chainId = options.chainId ?? POLYGON_CHAIN_ID
+  const ctx = options.ctx ?? { token: USDT0_TOKEN }
   const deadline = options.deadline ?? defaultDeadline()
   const recipient = options.recipient ?? intent.recipient
   const amount = options.amountWei ?? toTokenWei(intent.amount)
@@ -127,7 +151,7 @@ export function createSignedAuthorization(
     from: intent.sender,
     to: recipient,
     amount,
-    token: USDT0_TOKEN,
+    token: ctx.token,
     chainId,
     deadline,
     nonce: BigInt(intent.nonce)
@@ -135,7 +159,7 @@ export function createSignedAuthorization(
 
   async function composed(): Promise<SignedAuthorization> {
     const [permitSignature, relaySignature] = await Promise.all([
-      signPermit(wallet, permitMessage, chainId),
+      signPermit(wallet, permitMessage, chainId, ctx),
       signRelayOrder(wallet, orderMessage, relayAddress, chainId)
     ])
 
@@ -154,8 +178,13 @@ export function createSignedAuthorization(
   return composed()
 }
 
-export function signPermit(wallet: Signer, message: PermitMessage, chainId: number = POLYGON_CHAIN_ID): Promise<string> {
-  return wallet.signTypedData(usdt0PermitDomain(chainId), USDT0_PERMIT_TYPES, message)
+export function signPermit(
+  wallet: Signer,
+  message: PermitMessage,
+  chainId: number = POLYGON_CHAIN_ID,
+  ctx: PermitContext = { token: USDT0_TOKEN }
+): Promise<string> {
+  return wallet.signTypedData(usdt0PermitDomain(chainId, ctx), USDT0_PERMIT_TYPES, message)
 }
 
 export function signRelayOrder(wallet: Signer, message: RelayOrderMessage, relayAddress: string, chainId: number = POLYGON_CHAIN_ID): Promise<string> {
@@ -177,7 +206,8 @@ export function buildRelayRequest(
 export function verifyAuthorization(
   authorization: SignedAuthorization,
   relayAddress: string,
-  chainId: number = POLYGON_CHAIN_ID
+  chainId: number = POLYGON_CHAIN_ID,
+  context: PermitContext = { token: USDT0_TOKEN }
 ): ValidationResult {
   const errors: string[] = []
   const order = authorization.order
@@ -187,8 +217,8 @@ export function verifyAuthorization(
   if (!permit) return { ok: false, errors: ['Missing permit message'], signer: null }
 
   // ── structural field binding ──
-  if (order.token.toLowerCase() !== USDT0_TOKEN.toLowerCase()) {
-    errors.push(`Order token ${order.token} != USDT0 ${USDT0_TOKEN}`)
+  if (order.token.toLowerCase() !== context.token.toLowerCase()) {
+    errors.push(`Order token ${order.token} != expected ${context.token}`)
   }
   if (order.chainId !== chainId) {
     errors.push(`Order chainId ${order.chainId} != ${chainId}`)
@@ -226,7 +256,7 @@ export function verifyAuthorization(
   // ── cryptographic recovery ──
   let permitSigner: string | null = null
   try {
-    permitSigner = recoverPermitSigner(permit, authorization.permitSignature, chainId)
+    permitSigner = recoverPermitSigner(permit, authorization.permitSignature, chainId, context)
   } catch {
     errors.push('Permit signature invalid')
   }
@@ -298,6 +328,7 @@ export interface ExecuteRelayOptions {
   relayAddress: string
   policy?: Partial<RelayPolicy>
   now?: number
+  chain?: Partial<PermitContext> & { chainId: number; token: string }
 }
 
 export async function executeRelay(
@@ -306,6 +337,7 @@ export async function executeRelay(
 ): Promise<{ success: boolean; txHash?: string; gasUsed?: number; error?: string }> {
   const { authorization } = request
   const { provider, relayWallet } = options
+  const chain = options.chain ?? { chainId: POLYGON_CHAIN_ID, token: USDT0_TOKEN }
 
   // The relayer uses ONLY its operator-pinned relay contract. The client-supplied
   // authorization.relay is bound into the signed order, and is rejected unless
@@ -313,15 +345,15 @@ export async function executeRelay(
   const configuredRelay = options.relayAddress
 
   const basePolicy: RelayPolicy = {
-    chainId: POLYGON_CHAIN_ID,
-    token: USDT0_TOKEN,
+    chainId: chain.chainId,
+    token: chain.token,
     maxAmount: 10_000_000_000_000n,
     maxDeadlineAheadSeconds: 86_400,
     relay: configuredRelay
   }
   const policy: RelayPolicy = { ...basePolicy, ...options.policy }
 
-  const authResult = verifyAuthorization(authorization, configuredRelay)
+  const authResult = verifyAuthorization(authorization, configuredRelay, chain.chainId, chain)
   if (!authResult.ok) {
     return { success: false, error: 'Invalid authorization: ' + authResult.errors.join('; ') }
   }
@@ -332,8 +364,8 @@ export async function executeRelay(
   }
 
   const network = await provider.getNetwork()
-  if (Number(network.chainId) !== POLYGON_CHAIN_ID) {
-    return { success: false, error: `Unsupported chain ${network.chainId} (only 137)` }
+  if (Number(network.chainId) !== chain.chainId) {
+    return { success: false, error: `Unsupported chain ${network.chainId} (only ${chain.chainId})` }
   }
 
   const relay = new Contract(configuredRelay, RELAY_ABI, relayWallet)

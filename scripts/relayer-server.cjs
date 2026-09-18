@@ -13,16 +13,32 @@ const http = require('node:http')
 const { JsonRpcProvider, Wallet } = require('ethers')
 const {
   USDT0_TOKEN,
-  RELAY_EVENT_ABI
+  RELAY_EVENT_ABI,
+  MAINNET_CHAIN
 } = require('../build/.pipeline/submit-relay.js')
-const { POLYGON_CHAIN_ID } = require('../build/.pipeline/relayer.js')
 
 const PORT = Number(process.env.PORT || 8787)
-const RPC = process.env.POLYGON_RPC_URL || 'https://polygon-bor-rpc.publicnode.com'
+const RPC = process.env.ZERO_RPC_URL || process.env.POLYGON_RPC_URL || 'https://polygon-bor-rpc.publicnode.com'
 const RELAY = process.env.RELAY
 const LIVE = Boolean(process.env.RELAYER_PRIVATE_KEY)
 
-const provider = new JsonRpcProvider(RPC, POLYGON_CHAIN_ID)
+// ── Chain destination (default: Polygon mainnet USDT0; testnet via env) ──
+const chainConfig = {
+  chainId: Number(process.env.ZERO_CHAIN_ID || MAINNET_CHAIN.chainId),
+  network: process.env.ZERO_NETWORK || MAINNET_CHAIN.network,
+  token: process.env.ZERO_TOKEN || MAINNET_CHAIN.token,
+  tokenSymbol: process.env.ZERO_TOKEN_SYMBOL || MAINNET_CHAIN.tokenSymbol,
+  tokenName: process.env.ZERO_TOKEN_NAME || 'USDT0',
+  tokenVersion: process.env.ZERO_TOKEN_VERSION || '1',
+  tokenDecimals: Number(process.env.ZERO_TOKEN_DECIMALS || 6),
+  explorerUrl: process.env.ZERO_EXPLORER_URL || MAINNET_CHAIN.explorerUrl,
+  rpcUrl: RPC,
+  // USDT0 (and our TestUSDT mirror) encodes chainId in the salt slot and omits
+  // chainId from the EIP-712 domain — exactly what the wallet must sign.
+  saltSlotPermit: process.env.ZERO_SALT_SLOT !== '0'
+}
+
+const provider = new JsonRpcProvider(RPC, chainConfig.chainId)
 const relayerWallet = LIVE ? new Wallet(process.env.RELAYER_PRIVATE_KEY, provider) : null
 
 if (!RELAY) {
@@ -70,11 +86,19 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/config') {
     return json(res, 200, {
-      chainId: POLYGON_CHAIN_ID,
-      token: USDT0_TOKEN,
+      chainId: chainConfig.chainId,
+      chainIdHex: '0x' + chainConfig.chainId.toString(16),
+      network: chainConfig.network,
+      token: chainConfig.token,
+      tokenSymbol: chainConfig.tokenSymbol,
+      tokenName: chainConfig.tokenName,
+      tokenVersion: chainConfig.tokenVersion,
+      tokenDecimals: chainConfig.tokenDecimals,
+      saltSlotPermit: chainConfig.saltSlotPermit,
       relay: RELAY,
-      live: LIVE,
-      network: 'Polygon'
+      explorerUrl: chainConfig.explorerUrl,
+      rpcUrl: chainConfig.rpcUrl,
+      live: LIVE
     })
   }
 
@@ -102,7 +126,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const result = await submitRelay(
         { intent, authorization: auth },
-        { provider, relayWallet, relayAddress: RELAY }
+        { provider, relayWallet, relayAddress: RELAY, chain: chainConfig }
       )
       if (!result.success) {
         return json(res, 422, { status: 'FAILED', error: result.error })
@@ -170,7 +194,9 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`ZERO relayer listening on :${PORT}`)
-  console.log(`  network: Polygon (${POLYGON_CHAIN_ID})`)
+  console.log(`  network: ${chainConfig.network} (${chainConfig.chainId})`)
+  console.log(`  token:   ${chainConfig.tokenSymbol} @ ${chainConfig.token}`)
   console.log(`  relay:   ${RELAY}`)
+  console.log(`  explorer:${chainConfig.explorerUrl}`)
   console.log(`  mode:    ${LIVE ? 'LIVE (funded relayer)' : 'DEMO (signing only — settlement awaits live execution)'}`)
 })

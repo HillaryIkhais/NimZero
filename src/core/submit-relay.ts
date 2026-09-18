@@ -13,11 +13,36 @@ import {
   USDT0_TOKEN
 } from './relayer'
 
+export interface RelayChain {
+  chainId: number
+  network: string
+  token: string
+  tokenSymbol: string
+  tokenName: string
+  tokenVersion: string
+  tokenDecimals: number
+  saltSlotPermit: boolean
+  explorerUrl: string
+}
+
+export const MAINNET_CHAIN: RelayChain = {
+  chainId: POLYGON_CHAIN_ID,
+  network: 'Polygon',
+  token: USDT0_TOKEN,
+  tokenSymbol: 'USDT0',
+  tokenName: 'USDT0',
+  tokenVersion: '1',
+  tokenDecimals: 6,
+  saltSlotPermit: true,
+  explorerUrl: 'https://polygonscan.com'
+}
+
 export interface SubmitRelayOptions {
   provider: Provider
   relayWallet: Signer
   relayAddress: string
   policy?: Partial<RelayPolicy>
+  chain?: RelayChain
 }
 
 export interface RelayEvidence {
@@ -70,29 +95,35 @@ export async function submitRelay(
 ): Promise<SubmitRelayResult> {
   const { authorization } = request
   const { provider, relayWallet, relayAddress } = options
+  const chain = options.chain ?? MAINNET_CHAIN
 
   const network = await provider.getNetwork()
   const chainId = Number(network.chainId)
-  if (chainId !== POLYGON_CHAIN_ID) {
-    return { success: false, error: `Unsupported chain ${chainId} (only 137)` }
+  if (chainId !== chain.chainId) {
+    return { success: false, error: `Unsupported chain ${chainId} (only ${chain.chainId})` }
   }
 
   const policy: RelayPolicy = {
-    chainId: POLYGON_CHAIN_ID,
-    token: USDT0_TOKEN,
+    chainId: chain.chainId,
+    token: chain.token,
     maxAmount: 10_000_000_000_000n,
     maxDeadlineAheadSeconds: 86_400,
     relay: relayAddress,
     ...options.policy
   }
 
-  const usdt = new Contract(USDT0_TOKEN, USDT_ABI, provider)
+  const usdt = new Contract(chain.token, USDT_ABI, provider)
   const relayRead = new Contract(relayAddress, RELAY_READ_ABI, provider)
 
   const order = authorization.order
   const authenticatedUser = order.from.toLowerCase()
 
-  const authResult = verifyAuthorization(authorization, relayAddress, chainId)
+  const authResult = verifyAuthorization(authorization, relayAddress, chainId, {
+    token: chain.token,
+    name: chain.tokenName,
+    version: chain.tokenVersion,
+    saltSlot: chain.saltSlotPermit
+  })
   if (!authResult.ok) {
     return { success: false, error: 'Invalid authorization: ' + authResult.errors.join('; ') }
   }
@@ -122,6 +153,7 @@ export async function submitRelay(
     provider,
     relayWallet,
     relayAddress,
+    chain,
     policy
   })
   if (!executed.success || !executed.txHash) {
@@ -134,9 +166,19 @@ export async function submitRelay(
     chainId,
     relayAddress,
     usdt0DomainSeparator,
-    computedUsdt0Separator: computeUsdt0DomainSeparator(chainId),
+    computedUsdt0Separator: computeUsdt0DomainSeparator(chainId, {
+      token: chain.token,
+      name: chain.tokenName,
+      version: chain.tokenVersion,
+      saltSlot: chain.saltSlotPermit
+    }),
     relayDomainSeparator: relayDomainSeparator(relayAddress, chainId),
-    permitSigner: recoverPermitSigner(authorization.permit, authorization.permitSignature, chainId),
+    permitSigner: recoverPermitSigner(authorization.permit, authorization.permitSignature, chainId, {
+      token: chain.token,
+      name: chain.tokenName,
+      version: chain.tokenVersion,
+      saltSlot: chain.saltSlotPermit
+    }),
     relaySigner: recoverRelayOrderSigner(order, authorization.signature, relayAddress, chainId),
     authenticatedUser,
     tokenNonceSigned: tokenNonceSigned.toString(),
@@ -250,8 +292,8 @@ export async function verifyTransaction(
     receipt!.blockNumber
   )
   const match = events.find((e) => {
-    const args = e.args
-    return args && args.amount === expected.amountWei
+    const ev = e as unknown as { args: { amount: bigint } | null }
+    return ev.args != null && ev.args.amount === expected.amountWei
   })
   checks.push({
     label: 'RelayExecuted event: payer, recipient, exact amount',

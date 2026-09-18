@@ -17,7 +17,11 @@ import {
   RELAY_NAME,
   RELAY_VERSION,
   USDT0_NAME,
-  USDT0_VERSION
+  USDT0_VERSION,
+  USDT0_TOKEN,
+  USDT0_PERMIT_TYPES,
+  RELAY_ORDER_TYPES,
+  relayDomain
 } from '../src/core/relayer'
 import type { SignedAuthorization } from '../src/core/types'
 
@@ -64,6 +68,51 @@ describe('Relayer', () => {
     const result = verifyAuthorization(tampered, RELAY)
     expect(result.ok).toBe(false)
     expect(result.errors.join(' ')).toMatch(/spender/i)
+  })
+
+  it('testnet mirror token: salt-slot USDT0-style permit on chain 11155111 verifies with matching context', async () => {
+    const CHAIN = 11155111 // Ethereum Sepolia — the testnet Nimiq Pay supports
+    const TEST_TOKEN = '0x0000000000000000000000000000000000000A11'
+    const testnetContext = { token: TEST_TOKEN, name: 'USDT0', version: '1', saltSlot: true }
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600)
+
+    const intent = createPaymentIntent(ALICE.address, BOB.address, 2)
+    const permitMsg = { owner: ALICE.address, spender: RELAY, value: 2_000_000n, nonce: 0n, deadline }
+    const orderMsg = {
+      from: ALICE.address,
+      to: BOB.address,
+      amount: 2_000_000n,
+      token: TEST_TOKEN,
+      chainId: CHAIN,
+      deadline,
+      nonce: BigInt(intent.nonce)
+    }
+
+    // Mirrors the browser signing path exactly: generalized salt-slot domain.
+    const [permitSignature, signature] = await Promise.all([
+      ALICE.signTypedData(usdt0PermitDomain(CHAIN, testnetContext), USDT0_PERMIT_TYPES, permitMsg),
+      ALICE.signTypedData(relayDomain(RELAY, CHAIN), RELAY_ORDER_TYPES, orderMsg)
+    ])
+    const auth: SignedAuthorization = {
+      intentId: intent.id,
+      signature,
+      signedBy: ALICE.address,
+      signedAt: Date.now(),
+      permit: permitMsg,
+      permitSignature,
+      order: orderMsg,
+      relay: RELAY
+    }
+
+    const ok = verifyAuthorization(auth, RELAY, CHAIN, testnetContext)
+    expect(ok.ok).toBe(true)
+
+    // The same signature must be REJECTED under the mainnet USDT0 context —
+    // proves the testnet token is bound to its own address, never confused
+    // with production USDT0.
+    const mainnetReject = verifyAuthorization(auth, RELAY, CHAIN, { token: USDT0_TOKEN })
+    expect(mainnetReject.ok).toBe(false)
+    expect(mainnetReject.errors.join(' ')).toMatch(/token/i)
   })
 
   it('creates signed authorization with real EIP-712 signatures', async () => {

@@ -11,7 +11,17 @@ node_modules
 dist
 dist-ssr
 *.local
-build/.pipeline
+build
+cache
+artifacts
+coverage
+
+# Secrets / generated artifacts
+.env
+.env.*
+!.env.example
+authorization.json
+*.pem
 
 # Editor directories and files
 .vscode/*
@@ -23,3 +33,4 @@ build/.pipeline
 *.njsproj
 *.sln
 *.sw?
+.vercel

@@ -14,12 +14,17 @@
     "test:kill": "hardhat run scripts/killtest.cjs --network localhost",
     "fork:kill": "hardhat run scripts/forktest.cjs",
     "fork:pipeline": "tsc --project tsconfig.pipeline.json && node scripts/relay-path-build.mjs && hardhat run scripts/relay-path.cjs",
+    "fork:sepolia": "tsc --project tsconfig.pipeline.json && node scripts/relay-path-build.mjs && hardhat run scripts/sepolia-path.cjs --network localhost",
     "relay:build": "tsc --project tsconfig.pipeline.json && node scripts/relay-path-build.mjs",
     "relay:sign": "node scripts/sign-authorization.cjs",
-    "relay:submit": "node scripts/relay-submit.cjs"
+    "relay:submit": "node scripts/relay-submit.cjs",
+    "relay:server": "node scripts/relayer-server.cjs",
+    "compile": "hardhat compile",
+    "deploy:sepolia": "hardhat run scripts/deploy-sepolia.cjs --network sepolia"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.6.1",
+    "ethers": "^6.17.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
@@ -32,7 +37,6 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
-    "ethers": "^6.17.0",
     "hardhat": "^2.22.0",
     "oxlint": "^1.81.0",
     "qrcode": "^1.5.4",

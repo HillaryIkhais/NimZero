@@ -1,0 +1,56 @@
+# NimZero relayer — the only server in the product. Hosts /api/config +
+# /api/payments so the Vercel-hosted Mini App can do gasless USDT settlement.
+#
+# Deploy: push this repo root to GitHub, then on render.com:
+#   New + → Blueprint → pick the repo → Create Resources. Service: zero-relayer.
+#
+# Demo mode: leave RELAYER_PRIVATE_KEY unset (or inside the copy-paste box).
+# Live mode:  set RELAYER_PRIVATE_KEY (secret, via dashboard "sync: false"
+#   env var) to a funded Sepolia key, and point RELAY/ZERO_TOKEN at the real
+#   contracts from `npm run deploy:sepolia`.
+runtime: node
+plan: free
+region: oregon
+
+services:
+  - type: web
+    name: zero-relayer
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run relay:build
+    startCommand: node scripts/relayer-server.cjs
+    healthCheckPath: /api/config
+    numInstances: 1
+    autoDeploy: false
+    pullRequestPreviewsEnabled: false
+    envVars:
+      # ── Node 20+ (Render default is fine) ──
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
+      # ── Demo/testnet config. Replace RELAY + ZERO_TOKEN with the real
+      #    Sepolia deployment from `npm run deploy:sepolia`. ──
+      - key: RELAY
+        value: 0x625C12eE38AAF831D3b4d644D7DaA962e2a26E0a
+      - key: ZERO_CHAIN_ID
+        value: "11155111"
+      - key: ZERO_NETWORK
+        value: Ethereum Sepolia (testnet)
+      - key: ZERO_TOKEN
+        value: 0x0000000000000000000000000000000000000A11
+      - key: ZERO_TOKEN_NAME
+        value: USDT0
+      - key: ZERO_TOKEN_VERSION
+        value: "1"
+      - key: ZERO_TOKEN_SYMBOL
+        value: NIM-USDT
+      - key: ZERO_TOKEN_DECIMALS
+        value: "6"
+      - key: ZERO_SALT_SLOT
+        value: "1"
+      - key: ZERO_EXPLORER_URL
+        value: https://sepolia.etherscan.io
+      - key: ZERO_RPC_URL
+        value: https://ethereum-sepolia-rpc.publicnode.com
+      # ── Secret: set once in the dashboard; never commit a funded key. ──
+      - key: RELAYER_PRIVATE_KEY
+        sync: false

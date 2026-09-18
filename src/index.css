@@ -1,18 +1,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 
 :root {
-  --black: #0a0a0a;
-  --white: #f5f5f5;
-  --red: #e63946;
-  --green: #2ecc71;
-  --gray-100: #e8e8e8;
-  --gray-200: #d1d1d1;
-  --gray-300: #9a9a9a;
-  --gray-400: #6a6a6a;
-  --gray-500: #3a3a3a;
-  --gray-600: #2a2a2a;
-  --gray-700: #1a1a1a;
-
+  --bg: #0a0e17;
+  --bg-2: #101624;
+  --card: #151d2e;
+  --border: #223048;
+  --text: #f2f5fa;
+  --muted: #8b96ad;
+  --accent: #2ec6e8;
+  --green: #32e0a1;
+  --red: #ff5c6c;
   --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
   --font-mono: 'Space Mono', ui-monospace, monospace;
 }
@@ -24,15 +21,14 @@
 }
 
 html {
-  font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   font-family: var(--font-sans);
-  background-color: var(--black);
-  color: var(--white);
+  background: radial-gradient(1100px 500px at 50% -10%, #12203a 0%, var(--bg) 55%);
+  color: var(--text);
   line-height: 1.5;
   min-height: 100vh;
 }
@@ -41,14 +37,19 @@ body {
   min-height: 100vh;
 }
 
-::selection {
-  background: var(--red);
-  color: var(--white);
-}
-
 button {
   cursor: pointer;
   font-family: inherit;
   border: none;
   background: none;
+  color: inherit;
+}
+
+a {
+  color: var(--accent);
+}
+
+::selection {
+  background: var(--accent);
+  color: #06121f;
 }
