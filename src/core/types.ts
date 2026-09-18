@@ -72,11 +72,14 @@ export interface VerificationResult {
   details: string[]
 }
 
+export type PaymentStatus = 'SIGNING' | 'SUBMITTED' | 'VERIFYING' | 'VERIFIED' | 'FAILED' | 'DECLINED' | 'AWAITING_SETTLEMENT'
+
 export interface PaymentReceipt {
   id: string
   intent: PaymentIntent
   txHash: string
   gasPaidBy: 'ZERO'
+  status: PaymentStatus
   verified: boolean
   verification: VerificationResult
   completedAt: number

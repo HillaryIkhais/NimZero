@@ -1,42 +1,63 @@
-import type { PaymentIntent, SignedAuthorization, PaymentReceipt } from './types'
+import type { PaymentIntent, SignedAuthorization, PaymentReceipt, PaymentStatus, VerificationResult } from './types'
 import { verifyPayment } from './verification'
 
-export function generateReceipt(
-  intent: PaymentIntent,
-  authorization: SignedAuthorization,
-  txHash: string
-): PaymentReceipt {
-  const verification = verifyPayment(intent, authorization, txHash)
+export interface ReceiptInput {
+  intent: PaymentIntent
+  authorization: SignedAuthorization
+  txHash?: string
+  status: PaymentStatus
+  verification?: VerificationResult
+}
+
+export function generateReceipt(input: ReceiptInput): PaymentReceipt {
+  const verification = input.verification ?? verifyPayment(input.intent, input.authorization, input.txHash ?? '')
+
+  // "VERIFIED" only ever comes from independent on-chain verification —
+  // never from the relayer's own response.
+  const verified = input.status === 'VERIFIED' && verification.overall === 'CONFIRMED'
 
   return {
-    id: `receipt_${intent.id}`,
-    intent,
-    txHash,
+    id: `receipt_${input.intent.id}`,
+    intent: input.intent,
+    txHash: input.txHash ?? '',
     gasPaidBy: 'ZERO',
-    verified: verification.overall === 'CONFIRMED',
+    status: verified ? 'VERIFIED' : input.status,
+    verified,
     verification,
     completedAt: Date.now()
   }
 }
 
-export function formatReceipt(receipt: PaymentReceipt): string {
-  const status = receipt.verified ? '✓ PAYMENT COMPLETE' : '✗ PAYMENT FAILED'
-  const amount = `$${receipt.intent.amount.toFixed(2)} ${receipt.intent.asset}`
-  const recipient = receipt.intent.recipient.slice(0, 6) + '...' + receipt.intent.recipient.slice(-4)
-  const txHash = receipt.txHash.slice(0, 10) + '...' + receipt.txHash.slice(-6)
+export function polygonScanUrl(txHash: string): string {
+  if (!txHash) return ''
+  return `https://polygonscan.com/tx/${txHash}`
+}
 
-  return [
-    status,
-    '',
-    amount,
-    '',
-    `You paid:`,
-    recipient,
-    '',
-    `Gas paid by:`,
-    'ZERO',
-    '',
-    `TX:`,
-    txHash
-  ].join('\n')
+export function shortHash(txHash: string): string {
+  if (!txHash) return ''
+  return `${txHash.slice(0, 10)}…${txHash.slice(-8)}`
+}
+
+export function shortAddress(address: string): string {
+  if (!address) return ''
+  return `${address.slice(0, 6)}…${address.slice(-4)}`
+}
+
+export function statusLabel(status: PaymentStatus): string {
+  switch (status) {
+    case 'VERIFIED':
+      return 'Verified on Polygon'
+    case 'SUBMITTED':
+      return 'Submitted — verifying'
+    case 'VERIFYING':
+      return 'Verifying on Polygon'
+    case 'AWAITING_SETTLEMENT':
+      return 'Awaiting settlement'
+    case 'FAILED':
+      return 'Payment failed'
+    case 'DECLINED':
+      return 'Authorization declined'
+    default:
+      return 'Signing'
+  }
 }

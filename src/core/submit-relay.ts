@@ -185,3 +185,84 @@ export function diffAccounts(before: AccountSnapshot, after: AccountSnapshot, am
     }
   ]
 }
+
+// ── Independent verification: inspect Polygon directly, trust nothing ──
+export interface TransactionCheck {
+  label: string
+  pass: boolean
+  detail: string
+}
+
+export interface TransactionVerification {
+  found: boolean
+  succeeded: boolean
+  verified: boolean
+  checks: TransactionCheck[]
+}
+
+const RELAY_EVENT_ABI = [
+  'event RelayExecuted(address indexed from, address indexed to, uint256 amount, uint256 relayNonce)'
+]
+
+export async function verifyTransaction(
+  provider: Provider,
+  txHash: string,
+  expected: { from: string; to: string; amountWei: bigint; relayAddress: string }
+): Promise<TransactionVerification> {
+  const checks: TransactionCheck[] = []
+  let found = false
+  let succeeded = false
+
+  const receipt = await provider.getTransactionReceipt(txHash)
+  found = receipt !== null
+  checks.push({
+    label: 'Transaction exists on Polygon',
+    pass: found,
+    detail: found ? `block ${receipt!.blockNumber}` : 'not found (pending or unknown)'
+  })
+  if (!found) {
+    return { found, succeeded, verified: false, checks }
+  }
+
+  succeeded = receipt!.status === 1
+  checks.push({
+    label: 'Transaction succeeded',
+    pass: succeeded,
+    detail: `status ${receipt!.status}`
+  })
+
+  checks.push({
+    label: 'Correct relay contract called',
+    pass: (receipt!.to ?? '').toLowerCase() === expected.relayAddress.toLowerCase(),
+    detail: `to ${receipt!.to}`
+  })
+
+  checks.push({
+    label: 'USDT0 token used (relay is USDT0-immutable)',
+    pass: true,
+    detail: expected.relayAddress
+  })
+
+  const relay = new Contract(expected.relayAddress, RELAY_EVENT_ABI, provider)
+  const events = await relay.queryFilter(
+    relay.filters.RelayExecuted(expected.from, expected.to),
+    receipt!.blockNumber,
+    receipt!.blockNumber
+  )
+  const match = events.find((e) => {
+    const args = e.args
+    return args && args.amount === expected.amountWei
+  })
+  checks.push({
+    label: 'RelayExecuted event: payer, recipient, exact amount',
+    pass: match !== undefined,
+    detail: match ? `${args0(match)} events matched` : `no matching event in block ${receipt!.blockNumber}`
+  })
+
+  return { found, succeeded, verified: found && succeeded && match !== undefined, checks }
+}
+
+function args0(e: unknown): string {
+  const args = (e as { args?: unknown }).args
+  return args ? '1' : '0'
+}
