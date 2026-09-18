@@ -115,14 +115,35 @@ Set `VITE_RELAYER_URL=https://relayer.yourhost.com` in the Vercel project settin
 
 Why Sepolia: Nimiq Pay's supported EVM networks are Ethereum Mainnet, Polygon, Arbitrum One, Optimism, Base, BNB Smart Chain, and **Sepolia** (its testnet for developers). Polygon Amoy is not in that list, so the live testnet proof runs on Sepolia — the testnet the user's wallet can actually switch to. Production remains Polygon mainnet USDT0.
 
-1. Get free Sepolia ETH from a faucet.
-2. Deploy the test token + relay:
+1. Get free Sepolia ETH from a faucet (e.g. [Alchemy's Sepolia faucet](https://www.alchemy.com/faucets/ethereum-sepolia)).
+
+2. Deploy the test token + relay. **No private key needed** — the first run
+   generates a dedicated local deployer + relayer wallet pair in
+   `.sepolia/secrets.json` (gitignored, `0600`). Fund **both** printed
+   addresses from the faucet, then deploy:
 
 ```bash
-DEPLOYER_KEY=0x… USER_ADDRESS=0x… AMOUNT=100 npx hardhat run scripts/deploy-sepolia.cjs --network sepolia
+USER_ADDRESS=0x… AMOUNT=100 npm run deploy:sepolia
 ```
 
-3. Fund a relayer key with a little Sepolia ETH, then run the relayer with the printed `ZERO_*`/`RELAY` env.
+   - `USER_ADDRESS` is your **Nimiq Pay EVM address** — used only as the mint
+     target/recipient, never as a signer, and it stays at **0 ETH**.
+   - The script prints exactly the four addresses you need: `deployer`,
+     `relayer`, deployed `relay`, deployed `token`. It never prints or
+     commits private keys.
+   - Mint more NIM-USDT to the user anytime:
+     ```bash
+     ZERO_TOKEN=0x… USER_ADDRESS=0x… AMOUNT=50 npm run mint:sepolia
+     ```
+
+3. Run the relayer against that stack. Locally, `RELAYER_PRIVATE_KEY` is
+   filled in automatically from `.sepolia/secrets.json`; on a host, set it to
+   the relayer key (never in the repo):
+
+```bash
+RELAY=0x… ZERO_CHAIN_ID=11155111 ZERO_NETWORK="Ethereum Sepolia (testnet)" \
+ZERO_TOKEN=0x… ZERO_TOKEN_SYMBOL=NIM-USDT ZERO_RPC_URL=… node scripts/relayer-server.cjs
+```
 4. Deploy the frontend pointed at that relayer.
 5. In Nimiq Pay: switch to Sepolia → wallet shows `NIM-USDT` funded, `0 ETH` → send → signed → relayer settles → **Payment verified** → `POL: 0`.
 

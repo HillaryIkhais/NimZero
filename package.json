@@ -20,7 +20,8 @@
     "relay:submit": "node scripts/relay-submit.cjs",
     "relay:server": "node scripts/relayer-server.cjs",
     "compile": "hardhat compile",
-    "deploy:sepolia": "hardhat run scripts/deploy-sepolia.cjs --network sepolia"
+    "deploy:sepolia": "hardhat run scripts/deploy-sepolia.cjs --network sepolia",
+    "mint:sepolia": "node scripts/mint-sepolia.cjs"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.6.1",
