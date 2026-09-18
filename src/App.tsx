@@ -63,7 +63,7 @@ async function getConfig(): Promise<ChainConfig> {
   return res.json()
 }
 
-function shortAddress(address: string): string {
+export function shortAddress(address: string): string {
   if (!address) return '…'
   return `${address.slice(0, 6)}…${address.slice(-4)}`
 }
@@ -84,8 +84,11 @@ function explorerTxUrl(cfg: ChainConfig, txHash: string): string {
   return `${cfg.explorerUrl}/tx/${txHash}`
 }
 
-function chainName(cfg: ChainConfig): string {
-  return cfg.network
+function avatarFor(address: string): string {
+  const hex = address.replace(/^0x/, '').padEnd(40, '0')
+  let seed = 0
+  for (let i = 0; i < 6; i++) seed = (seed * 31 + hex.charCodeAt(i * 2)) % 360
+  return `conic-gradient(from ${seed}deg, #ff8a00, #ff5f3d 45%, #8b7bff 70%, #3ad7ff)`
 }
 
 function App() {
@@ -110,14 +113,12 @@ function App() {
     [cfg, amount]
   )
 
-  // ── Load operator config (network, token, relay, explorer) ──
   useEffect(() => {
     getConfig()
       .then(setCfg)
       .catch((err) => setConfigError(err instanceof Error ? err.message : String(err)))
   }, [])
 
-  // ── Boot the injected wallet provider (Nimiq Pay) ──
   const switchChain = useCallback(async (p: BrowserProvider, c: ChainConfig) => {
     try {
       await p.send('wallet_switchEthereumChain', [{ chainId: c.chainIdHex }])
@@ -126,7 +127,7 @@ function App() {
         await p.send('wallet_addEthereumChain', [
           {
             chainId: c.chainIdHex,
-            chainName: chainName(c),
+            chainName: c.network,
             rpcUrls: [c.rpcUrl],
             nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
             blockExplorerUrls: [c.explorerUrl]
@@ -190,7 +191,6 @@ function App() {
     }
   }, [cfg, provider, refreshBalances, switchChain])
 
-  // ── Signing + submission ──
   async function signAndSubmit(info: ReviewInfo) {
     if (!provider || !cfg || !wallet.address) throw new Error('Wallet not connected')
     setVerification([])
@@ -359,12 +359,11 @@ function App() {
       status: 'verified',
       txHash,
       title: 'Payment verified',
-      message: `${wallet.address ? shortAddress(wallet.address) : ''} — verified on ${chainName(cfg)} by NimZero's independent check.`
+      message: `${wallet.address ? shortAddress(wallet.address) : ''} — verified on ${cfg.network} by NimZero's independent check.`
     })
     setVerification((v) => [...v, ...checks])
   }
 
-  // ── Screen transitions ──
   const startReview = () => {
     if (!wallet.connected || !cfg) return
     if (!/^0x[a-fA-F0-9]{40}$/.test(recipient)) {
@@ -406,15 +405,25 @@ function App() {
     setReceipt(null)
   }
 
-  // ── Render ──
+  const stepByScreen: Record<Screen, number> = {
+    home: 0,
+    review: 1,
+    signing: 2,
+    receipt: 3
+  }
+
   if (configError && !cfg) {
     return (
       <div className="app">
-        <Header cfg={cfg} />
+        <Header cfg={null} />
         <main className="main">
-          <div className="card">
-            <div className="error-title">NimZero can't start</div>
-            <p className="error-message">{configError}</p>
+          <div className="fatal">
+            <div className="fatal-orb">!</div>
+            <h1 className="fatal-title">NimZero can't start</h1>
+            <p className="fatal-text">{configError}</p>
+            <button className="btn-primary" onClick={() => location.reload()}>
+              Retry
+            </button>
           </div>
         </main>
       </div>
@@ -426,7 +435,10 @@ function App() {
       <div className="app">
         <Header cfg={null} />
         <main className="main">
-          <div className="card">Loading operator configuration…</div>
+          <div className="fatal">
+            <div className="loader-coin" />
+            <p className="fatal-text">Talking to the NimZero relayer…</p>
+          </div>
         </main>
       </div>
     )
@@ -436,6 +448,8 @@ function App() {
     <div className="app">
       <Header cfg={cfg} />
       <main className="main">
+        <Stepper step={stepByScreen[screen]} />
+
         {screen === 'home' && (
           <HomeScreen
             cfg={cfg}
@@ -463,7 +477,7 @@ function App() {
         )}
       </main>
       <footer className="footer">
-        <span>And you never touched POL to do it.</span>
+        <span>You never touched POL to do it.</span>
       </footer>
     </div>
   )
@@ -472,11 +486,31 @@ function App() {
 function Header({ cfg }: { cfg: ChainConfig | null }) {
   return (
     <header className="header">
-      <div className="logo">NIMZERO</div>
-      <div className="tagline">
-        {cfg && cfg.network && cfg.chainId !== 137 && <span className="badge">Testnet · {cfg.network}</span>}
+      <div className="brand">
+        <span className="brand-bolt"><BoltIcon /></span>
+        <span className="logo">NIMZERO</span>
+      </div>
+      <div className="header-pills">
+        {cfg && cfg.network && cfg.chainId !== 137 && (
+          <span className="badge">{cfg.network}</span>
+        )}
+        {cfg && !cfg.live && <span className="badge demo">DEMO</span>}
       </div>
     </header>
+  )
+}
+
+function Stepper({ step }: { step: number }) {
+  const steps = ['Send', 'Review', 'Wallet', 'Receipt']
+  return (
+    <nav className="stepper" aria-label="progress">
+      {steps.map((label, i) => (
+        <div key={label} className={`step ${i < step ? 'done' : ''} ${i === step ? 'now' : ''}`}>
+          <span className="step-dot">{i < step ? <CheckIcon /> : i + 1}</span>
+          <span className="step-label">{label}</span>
+        </div>
+      ))}
+    </nav>
   )
 }
 
@@ -495,70 +529,177 @@ function HomeScreen(props: {
   return (
     <div className="screen">
       <section className="hero">
-        <h1 className="hero-title">Pay USDT on Polygon without POL.</h1>
+        <p className="kicker">GASLESS PAYMENTS</p>
+        <h1 className="hero-title">
+          Pay USDT on Polygon <span className="ink">— without POL.</span>
+        </h1>
         <p className="hero-sub">
           Send {cfg.tokenSymbol} on {cfg.network}. The network fee is paid for you.
         </p>
       </section>
 
-      <section className="card balances">
-        <div className="balance-row">
-          <span className="balance-label">{cfg.tokenSymbol}</span>
-          <span className="balance-value">
-            {wallet.connected ? `${wallet.token} ${cfg.tokenSymbol}` : '—'}
-          </span>
-        </div>
-        <div className="balance-row">
-          <span className="balance-label">POL (gas)</span>
-          <span className="balance-value">{wallet.connected ? `${wallet.pol} POL` : '—'}</span>
-        </div>
-        {wallet.pol === '0.00' && (
-          <div className="zero-tag">0 POL — no problem, gas is sponsored.</div>
-        )}
-      </section>
-
-      {!wallet.connected && onConnect && (
-        <button className="btn-primary" onClick={onConnect}>
-          Connect wallet
-        </button>
-      )}
+      <WalletCard cfg={cfg} wallet={wallet} onConnect={onConnect} />
 
       {wallet.connected && (
-        <>
-          <section className="card">
-            <label className="field-label">Recipient</label>
-            <input
-              className="field-input"
-              value={recipient}
-              placeholder="0x… (40 hex)"
-              onChange={(e) => onRecipient(e.target.value)}
-              spellCheck={false}
-            />
-            <label className="field-label">Amount</label>
-            <input
-              className="field-input"
-              type="number"
-              value={Number.isFinite(amount) ? amount : 1}
-              min={0.01}
-              step={0.01}
-              onChange={(e) => onAmount(Number(e.target.value))}
-            />
-          </section>
-
-          <div className="fee-note">
-            <span>{cfg.tokenSymbol} amount</span>
-            <span>
-              {('$' + (Number.isFinite(amount) ? amount : 0).toFixed(2))} · fee $0.00
-            </span>
-          </div>
-
-          {configError && <div className="error-message">{configError}</div>}
-
-          <button className="btn-primary" onClick={onContinue}>
-            Review
-          </button>
-        </>
+        <Composer
+          cfg={cfg}
+          wallet={wallet}
+          recipient={recipient}
+          amount={amount}
+          configError={configError}
+          onRecipient={onRecipient}
+          onAmount={onAmount}
+          onContinue={onContinue}
+        />
       )}
+    </div>
+  )
+}
+
+function WalletCard({
+  cfg,
+  wallet,
+  onConnect
+}: {
+  cfg: ChainConfig
+  wallet: WalletInfo
+  onConnect?: () => void
+}) {
+  const connected = wallet.connected
+  return (
+    <section className={`wallet-card ${connected ? 'is-connected' : ''}`}>
+      <div className="wallet-aurora" aria-hidden="true" />
+      <div className="wallet-top">
+        <div className="wallet-brand">
+          <TokenOrb token={cfg.tokenSymbol} size="sm" />
+          <span className="wallet-name">NimZero Pay</span>
+        </div>
+        <span className="chip-mono">{connected ? shortAddress(wallet.address) : 'no wallet'}</span>
+      </div>
+
+      <div className="chip-row">
+        <div className="chip" aria-hidden="true">
+          <i /><i /><i />
+        </div>
+        <span className="contactless" aria-hidden="true">
+          <i /><i /><i />
+        </span>
+      </div>
+
+      <div className="wallet-balance">
+        <span className="balance-amount">{connected ? wallet.token : '——'}</span>
+        <span className="balance-token">{cfg.tokenSymbol}</span>
+      </div>
+
+      <div className="wallet-rows">
+        <div className="wallet-row">
+          <span className="w-label"><i className="mini-dot mint" /> {cfg.tokenSymbol}</span>
+          <span className="w-value">{connected ? wallet.token : '—'}</span>
+        </div>
+        <div className="wallet-row">
+          <span className="w-label"><BoltIcon /> POL (gas)</span>
+          <span className={`w-value ${connected && wallet.pol === '0.00' ? 'blb' : ''}`}>
+            {connected ? wallet.pol : '—'}
+          </span>
+        </div>
+      </div>
+
+      {!connected && onConnect ? (
+        <button className="btn-primary btn-connect" onClick={onConnect}>
+          <WalletIcon /> Connect wallet
+        </button>
+      ) : (
+        <div className="sponsor-strip">
+          <span className="sponsor-bolt"><BoltIcon /></span>
+          <span>0 POL needed — the relayer pays your gas</span>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function Composer(props: {
+  cfg: ChainConfig
+  wallet: WalletInfo
+  recipient: string
+  amount: number
+  configError: string
+  onRecipient: (value: string) => void
+  onAmount: (value: number) => void
+  onContinue: () => void
+}) {
+  const { cfg, wallet, recipient, amount, configError, onRecipient, onAmount, onContinue } = props
+  const chips = ['5', '10', '25', '50', '100']
+  return (
+    <div className="composer">
+      <div className="amount-edit">
+        <span className="amount-prefix">$</span>
+        <input
+          className="amount-input"
+          type="number"
+          value={Number.isFinite(amount) ? amount : 1}
+          min={0.01}
+          step={0.01}
+          onChange={(e) => onAmount(Number(e.target.value))}
+          aria-label="Amount"
+        />
+        <TokenOrb token={cfg.tokenSymbol} size="md" />
+      </div>
+      <div className="amount-line">
+        <span className="amount-note">
+          {(`${cfg.tokenSymbol} · $${(Number.isFinite(amount) ? amount : 0).toFixed(2)}`)}
+        </span>
+        <div className="chips">
+          {chips.map((c) => (
+            <button
+              key={c}
+              className={`chip-btn ${amount === Number(c) ? 'is-on' : ''}`}
+              onClick={() => onAmount(Number(c))}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <section className="recipient-box">
+        <span className="mini-avatar" style={{ background: avatarFor(recipient || '0x') }} aria-hidden="true" />
+        <div className="recipient-field">
+          <label className="field-label">Recipient</label>
+          <input
+            className="field-input"
+            value={recipient}
+            placeholder="0x… (40 hex)"
+            onChange={(e) => onRecipient(e.target.value)}
+            spellCheck={false}
+          />
+        </div>
+      </section>
+
+      <section className="fee-card">
+        <div className="fee-row">
+          <span>Network fee</span>
+          <span className="fee-zero">
+            <span className="fee-through">$0.00</span>
+            <span className="fee-sponsored"><BoltIcon /> sponsored</span>
+          </span>
+        </div>
+        <div className="fee-row">
+          <span>Your POL</span>
+          <span className="fee-safe">{wallet.pol} · untouched</span>
+        </div>
+        <div className="fee-row">
+          <span>Settlement</span>
+          <span className="fee-normal">1 tx by the NimZero relayer</span>
+        </div>
+      </section>
+
+      {configError && <div className="error-message">{configError}</div>}
+
+      <button className="btn-primary btn-send" onClick={onContinue}>
+        Review payment <SendIcon />
+      </button>
+      <p className="tiny-note">You'll sign in Nimiq Pay. No POL is ever taken from your wallet.</p>
     </div>
   )
 }
@@ -572,15 +713,21 @@ function ReviewScreen(props: {
   const { cfg, review, onBack, onConfirm } = props
   return (
     <div className="screen">
-      <h2 className="screen-title">Review payment</h2>
+      <section className="hero compact">
+        <p className="kicker">REVIEW</p>
+        <h1 className="hero-title">One authorization.</h1>
+        <p className="hero-sub">Signed in your wallet, settled by the relayer — zero POL for you.</p>
+      </section>
 
-      <section className="card review-card">
-        <div className="review-row">
-          <span>Paying</span>
-          <span className="review-strong">
-            {`$${review.amount.toFixed(2)} ${cfg.tokenSymbol}`}
-          </span>
+      <section className="review-hero">
+        <TokenOrb token={cfg.tokenSymbol} size="lg" />
+        <div className="review-amount">
+          <span className="review-amount-main">${review.amount.toFixed(2)}</span>
+          <span className="review-amount-sub">{cfg.tokenSymbol} · fee $0.00</span>
         </div>
+      </section>
+
+      <section className="review-card">
         <div className="review-row">
           <span>To</span>
           <span className="review-mono">{shortAddress(review.recipient)}</span>
@@ -591,23 +738,23 @@ function ReviewScreen(props: {
         </div>
         <div className="review-row">
           <span>Network fee</span>
-          <span className="review-strong">$0.00</span>
+          <span className="review-strong blb">$0.00</span>
         </div>
         <div className="review-row">
           <span>Gas paid by</span>
-          <span>the NimZero relayer</span>
+          <span className="review-strong"><BoltIcon /> NimZero relayer</span>
         </div>
         <div className="review-row">
           <span>Your POL balance</span>
-          <span>unchanged (sponsored)</span>
+          <span>unchanged</span>
         </div>
       </section>
 
       <button className="btn-secondary" onClick={onBack}>
         Back
       </button>
-      <button className="btn-primary" onClick={onConfirm}>
-        Authorize in wallet
+      <button className="btn-primary btn-send" onClick={onConfirm}>
+        <WalletIcon /> Authorize in wallet
       </button>
       <p className="tiny-note">
         You'll sign one authorization in Nimiq Pay. No POL is taken from your wallet — ever.
@@ -618,22 +765,47 @@ function ReviewScreen(props: {
 
 function SigningScreen(props: { cfg: ChainConfig; verification: string[] }) {
   const { cfg, verification } = props
+  const phases = ['Permit for the relayer', 'Relay order to the recipient', 'Settlement submitted']
   return (
     <div className="screen">
-      <h2 className="screen-title">Authorizing…</h2>
-      <p className="muted">
+      <section className="hero compact">
+        <p className="kicker">AUTHORIZING</p>
+        <h1 className="hero-title">Sealing your signature.</h1>
+      </section>
+
+      <div className="orbit">
+        <div className="orbit-ring orbit-a" />
+        <div className="orbit-ring orbit-b" />
+        <div className="orbit-core"><BoltIcon /></div>
+        <span className="orbit-chip chip-a">{cfg.tokenSymbol}</span>
+        <span className="orbit-chip chip-b">0 POL</span>
+      </div>
+
+      <p className="muted center">
         Confirm the two-part authorization in your wallet. Then the NimZero relayer submits one
         settlement transaction on {cfg.network}.
       </p>
-      <div className="spinner" />
+
+      <section className="phase-card">
+        {phases.map((phase, i) => (
+          <div key={phase} className={`phase ${verification.length > i ? 'done' : i === 0 ? 'pulse' : ''}`}>
+            <span className="phase-dot">
+              {verification.length > i ? <CheckIcon /> : i + 1}
+            </span>
+            <span className="phase-label">{phase}</span>
+          </div>
+        ))}
+      </section>
+
       {verification.length > 0 && (
-        <div className="verification">
+        <section className="form-card">
+          <div className="card-label">Relayer activity</div>
           {verification.map((line, i) => (
             <div key={i} className="verification-line">
-              ✓ {line}
+              <CheckIcon /> {line}
             </div>
           ))}
-        </div>
+        </section>
       )}
     </div>
   )
@@ -649,54 +821,112 @@ function ReceiptScreen(props: {
   if (!receipt) return null
   const verified = receipt.status === 'verified'
   const pending = receipt.status === 'awaiting' || receipt.status === 'verifying'
+  const failed = receipt.status === 'failed'
+  const orbClass = verified ? 'ok' : failed ? 'fail' : 'pending'
+  const orbIcon = verified ? <CheckIcon /> : failed ? <XIcon /> : <ClockIcon />
   return (
     <div className="screen">
-      <h2 className={`screen-title ${verified ? 'success' : pending ? 'pending' : 'fail'}`}>
-        {receipt.status === 'awaiting' ? '⏳' : verified ? '✓' : '×'} {receipt.title}
-      </h2>
-      <p className="muted">{receipt.message}</p>
+      <section className="hero compact center">
+        <div className={`status-orb ${orbClass}`}>{orbIcon}</div>
+        <h1 className="hero-title">{receipt.title}</h1>
+        <p className="hero-sub">{receipt.message}</p>
+      </section>
 
       {receipt.txHash && (
-        <section className="card tx-card">
-          <div className="review-row">
-            <span>Transaction</span>
-            <a
-              className="review-mono link"
-              href={explorerTxUrl(cfg, receipt.txHash)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {receipt.txHash.slice(0, 10)}…{receipt.txHash.slice(-8)}
-            </a>
-          </div>
+        <section className="form-card">
+          <div className="card-label">Transaction</div>
+          <a
+            className="review-mono link tx-link"
+            href={explorerTxUrl(cfg, receipt.txHash)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {receipt.txHash.slice(0, 10)}…{receipt.txHash.slice(-8)} ↗
+          </a>
         </section>
       )}
 
       {verification.length > 0 && (
-        <section className="card">
+        <section className="form-card">
           <div className="card-label">Independent on-chain check</div>
           {verification.map((line, i) => (
             <div key={i} className="verification-line">
-              ✓ {line}
+              <CheckIcon /> {line}
             </div>
           ))}
         </section>
       )}
 
-      {warnings(receipt) && (
+      {pending && (
         <div className="warn-note">
-          Note: this settlement is pending live execution. Nothing is simulated.
+          <ClockIcon /> Settlement is pending live execution. Nothing is simulated.
         </div>
       )}
 
-      <button className="btn-primary" onClick={onReset}>
+      <button className="btn-primary btn-send" onClick={onReset}>
         {verified ? 'Make another payment' : 'Back'}
       </button>
     </div>
   )
-  function warnings(r: ReceiptInfo): boolean {
-    return r.status === 'awaiting'
-  }
+}
+
+function TokenOrb({ token, size = 'md' }: { token: string; size?: 'sm' | 'md' | 'lg' }) {
+  return (
+    <span className={`orb ${size}`} aria-hidden="true">
+      <span className="orb-inner">{token.slice(0, 1)}</span>
+    </span>
+  )
+}
+
+function BoltIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H13L13 2z" />
+    </svg>
+  )
+}
+
+function WalletIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3.5 7A2.5 2.5 0 0 1 6 4.5h11a2 2 0 0 1 2 2v.5h-13a2.5 2.5 0 0 1-2.5-2.5z" />
+      <path d="M3.5 9.5v6A2.5 2.5 0 0 0 6 18h13.5a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1H6a2.5 2.5 0 0 0-2.5 1.5z" />
+      <circle cx="16.5" cy="13.5" r="1.2" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+    </svg>
+  )
+}
+
+function XIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  )
+}
+
+function ClockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  )
+}
+
+function SendIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 4 5 19l7-3.2L19 19 12 4z" />
+    </svg>
+  )
 }
 
 export default App
