@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BrowserProvider, Contract } from 'ethers'
+import { BrowserProvider, Contract, Wallet } from 'ethers'
 import type { Signer } from 'ethers'
 import { createPaymentIntent } from './core/payment-intent'
 import {
@@ -33,7 +33,7 @@ interface ChainConfig {
   live: boolean
 }
 
-type Screen = 'home' | 'review' | 'signing' | 'receipt'
+type Screen = 'home' | 'pay' | 'review' | 'signing' | 'receipt'
 
 interface WalletInfo {
   connected: boolean
@@ -116,6 +116,32 @@ function avatarFor(address: string): string {
   return `conic-gradient(from ${seed}deg, #f8a81b, #e8762b 45%, #1f2348 70%, #25c28f)`
 }
 
+function demoAddr(seed: string): string {
+  const hex = '0123456789abcdef'
+  let h = 0
+  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff
+  let out = ''
+  for (let i = 0; i < 40; i++) {
+    h = (h * 1103515245 + 12345) & 0xffffffff
+    out += hex[(h >>> 24) % 16]
+  }
+  return '0x' + out
+}
+
+const DEMO_CONTACTS = ['Ceylon', 'Sashi', 'Momo', 'Kimani', 'Ava'].map((name) => ({
+  name,
+  addr: demoAddr(name)
+}))
+
+const DEMO_TXS = [
+  { name: 'Ceylon', date: 'Sep 14 · 09:41', delta: -25 },
+  { name: 'Sashi', date: 'Sep 12 · 18:02', delta: -10 },
+  { name: 'Receipt', date: 'Sep 09 · 12:27', delta: 50 },
+  { name: 'Momo', date: 'Sep 06 · 21:15', delta: -5 },
+  { name: 'Kimani', date: 'Sep 02 · 08:33', delta: -12 },
+  { name: 'Ava', date: 'Aug 28 · 14:50', delta: -30 }
+].map((tx) => ({ ...tx, addr: demoAddr(tx.name) }))
+
 function App() {
   const [cfg, setCfg] = useState<ChainConfig | null>(null)
   const [configError, setConfigError] = useState<string>('')
@@ -132,6 +158,7 @@ function App() {
   const [review, setReview] = useState<ReviewInfo | null>(null)
   const [receipt, setReceipt] = useState<ReceiptInfo | null>(null)
   const [verification, setVerification] = useState<string[]>([])
+  const [demo, setDemo] = useState<Signer | null>(null)
 
   const tokenWei = useMemo(
     () => (cfg ? toTokenWei(amount, cfg.tokenDecimals) : 0n),
@@ -182,9 +209,10 @@ function App() {
 
   const connect = useCallback(async () => {
     if (!window.ethereum) {
-      setConfigError('No EVM wallet found. Open this Mini App inside Nimiq Pay to continue.')
+      setConfigError('No EVM wallet found. Use a wallet inside Nimiq Pay, or tap “Explore the demo” to simulate one.')
       return
     }
+    setConfigError('')
     const c = cfg
     if (!c) return
     const p = new BrowserProvider(window.ethereum)
@@ -199,8 +227,16 @@ function App() {
     }
   }, [cfg, switchChain, refreshBalances])
 
+  const startDemo = useCallback(() => {
+    const w = Wallet.createRandom()
+    setDemo(w)
+    setProvider(null)
+    setWallet({ connected: true, address: w.address, pol: '0.00', token: '12.48' })
+    setConfigError('')
+  }, [])
+
   useEffect(() => {
-    if (cfg && window.ethereum && !provider) {
+    if (cfg && !demo && window.ethereum && !provider) {
       const p = new BrowserProvider(window.ethereum)
       setProvider(p)
       p.send('eth_requestAccounts', [])
@@ -214,20 +250,26 @@ function App() {
           // leave disconnected until the user taps "Connect"
         })
     }
-  }, [cfg, provider, refreshBalances, switchChain])
+  }, [cfg, provider, refreshBalances, switchChain, demo])
 
   async function signAndSubmit(info: ReviewInfo) {
-    if (!provider || !cfg || !wallet.address) throw new Error('Wallet not connected')
+    if (!cfg || !wallet.address) throw new Error('Wallet not connected')
     setVerification([])
 
-    const signer: Signer = await provider.getSigner(wallet.address)
-
-    const tokenContract = new Contract(
-      cfg.token,
-      ['function nonces(address owner) view returns (uint256)'],
-      provider
-    )
-    const tokenNonce = await tokenContract.nonces(wallet.address)
+    let signer: Signer | null = null
+    let tokenNonce = 0n
+    if (demo) {
+      signer = demo
+    } else if (provider) {
+      signer = await provider.getSigner(wallet.address)
+      const tokenContract = new Contract(
+        cfg.token,
+        ['function nonces(address owner) view returns (uint256)'],
+        provider
+      )
+      tokenNonce = await tokenContract.nonces(wallet.address)
+    }
+    if (!signer) throw new Error('Wallet not connected')
 
     const amountWei = BigInt(info.amountWei)
     const nowSec = BigInt(Math.floor(Date.now() / 1000))
@@ -432,6 +474,7 @@ function App() {
 
   const stepByScreen: Record<Screen, number> = {
     home: 0,
+    pay: 0,
     review: 1,
     signing: 2,
     receipt: 3
@@ -469,14 +512,24 @@ function App() {
     )
   }
 
-  return (
+  return screen === 'home' ? (
+    <HomeScreen
+      cfg={cfg}
+      wallet={wallet}
+      configError={configError}
+      onRecipient={setRecipient}
+      onConnect={provider ? undefined : connect}
+      onStartDemo={startDemo}
+      onPay={() => setScreen('pay')}
+    />
+  ) : (
     <div className="app">
       <Header cfg={cfg} />
       <main className="main">
         <Stepper step={stepByScreen[screen]} />
 
-        {screen === 'home' && (
-          <HomeScreen
+        {screen === 'pay' && (
+          <PayScreen
             cfg={cfg}
             wallet={wallet}
             recipient={recipient}
@@ -484,8 +537,8 @@ function App() {
             configError={configError}
             onRecipient={setRecipient}
             onAmount={setAmount}
-            onConnect={provider ? undefined : connect}
             onContinue={startReview}
+            onBack={() => setScreen('home')}
           />
         )}
 
@@ -542,134 +595,295 @@ function Stepper({ step }: { step: number }) {
 function HomeScreen(props: {
   cfg: ChainConfig
   wallet: WalletInfo
-  recipient: string
-  amount: number
   configError: string
   onRecipient: (value: string) => void
-  onAmount: (value: number) => void
   onConnect?: () => void
-  onContinue: () => void
+  onStartDemo: () => void
+  onPay: () => void
 }) {
-  const { cfg, wallet, recipient, amount, configError, onRecipient, onAmount, onConnect, onContinue } = props
-  return (
-    <div className="screen">
-      <section className="hero">
-        <p className="kicker">GASLESS PAYMENTS</p>
-        <h1 className="hero-title">
-          Pay USDT on Polygon <span className="ink">— without POL.</span>
-        </h1>
-        <p className="hero-sub">
-          Send {cfg.tokenSymbol} on {cfg.network}. The network fee is paid for you.
-        </p>
-      </section>
-
-      <WalletCard cfg={cfg} wallet={wallet} onConnect={onConnect} />
-
-      {wallet.connected && (
-        <Composer
-          cfg={cfg}
-          wallet={wallet}
-          recipient={recipient}
-          amount={amount}
-          configError={configError}
-          onRecipient={onRecipient}
-          onAmount={onAmount}
-          onContinue={onContinue}
-        />
-      )}
-    </div>
-  )
-}
-
-function WalletCard({
-  cfg,
-  wallet,
-  onConnect
-}: {
-  cfg: ChainConfig
-  wallet: WalletInfo
-  onConnect?: () => void
-}) {
+  const { cfg, wallet, configError, onRecipient, onConnect, onStartDemo, onPay } = props
   const connected = wallet.connected
+  const [sheet, setSheet] = useState<'menu' | 'connect' | null>(null)
+  const [tab, setTab] = useState<'home' | 'stat' | 'activity'>('home')
+  const [masked, setMasked] = useState(false)
   const [full, setFull] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const toggleAddress = async () => {
-    if (full) return
-    if (!wallet.address) return
+  const requestPay = () => {
+    if (connected) onPay()
+    else setSheet('connect')
+  }
+
+  const pickContact = (addr: string) => {
+    onRecipient(addr)
+    requestPay()
+  }
+
+  const revealAddress = async () => {
+    if (!wallet.address || full) return
     setFull(true)
-    const ok = await copyText(wallet.address)
-    if (ok) {
+    if (await copyText(wallet.address)) {
       setCopied(true)
       setTimeout(() => setCopied(false), 1600)
     }
   }
 
   return (
-    <section className={`wallet-card ${connected ? 'is-connected' : ''}`}>
-      <div className="wallet-aurora" aria-hidden="true" />
-      <div className="wallet-top">
-        <div className="wallet-brand">
-          <TokenOrb token={cfg.tokenSymbol} size="sm" />
-          <span className="wallet-name">NimZero Pay</span>
-        </div>
-        {connected ? (
-          <button
-            className={`chip-mono addr-chip ${full ? 'is-full' : ''}`}
-            onClick={toggleAddress}
-            aria-expanded={full}
-            title={full ? wallet.address : 'Tap to reveal your full address'}
-          >
-            {full ? wallet.address : shortAddress(wallet.address)}
-            <span className="addr-copy">{copied ? <CheckIcon /> : <CopyIcon />}</span>
-          </button>
-        ) : (
-          <span className="chip-mono">no wallet</span>
-        )}
-      </div>
-
-      <div className="chip-row">
-        <div className="chip" aria-hidden="true">
-          <i /><i /><i />
-        </div>
-        <span className="contactless" aria-hidden="true">
-          <i /><i /><i />
-        </span>
-      </div>
-
-      <div className="wallet-balance">
-        <span className="balance-amount">{connected ? wallet.token : '——'}</span>
-        <span className="balance-token">{cfg.tokenSymbol}</span>
-      </div>
-
-      <div className="wallet-rows">
-        <div className="wallet-row">
-          <span className="w-label"><i className="mini-dot mint" /> {cfg.tokenSymbol}</span>
-          <span className="w-value">{connected ? wallet.token : '—'}</span>
-        </div>
-        <div className="wallet-row">
-          <span className="w-label"><BoltIcon /> POL (gas)</span>
-          <span className={`w-value ${connected && wallet.pol === '0.00' ? 'blb' : ''}`}>
-            {connected ? wallet.pol : '—'}
-          </span>
-        </div>
-      </div>
-
-      {!connected && onConnect ? (
-        <button className="btn-primary btn-connect" onClick={onConnect}>
-          <WalletIcon /> Connect wallet
+    <div className="app wallet-home">
+      <nav className="appbar" aria-label="Wallet header">
+        <button className="icon-btn" aria-label="Menu" onClick={() => setSheet('menu')}>
+          <MenuIcon />
         </button>
-      ) : (
-        <div className="sponsor-strip">
-          <span className="sponsor-bolt"><BoltIcon /></span>
-          <span>0 POL needed — the relayer pays your gas</span>
+        <div className="appbar-title">
+          <span className="appbar-title-main">Wallet</span>
+          <span className="appbar-title-sub">My Cards &amp; Transaction</span>
+        </div>
+        <button className="icon-btn" aria-label="Start a payment" onClick={requestPay}>
+          <PlusIcon />
+        </button>
+      </nav>
+
+      {tab === 'home' && (
+        <>
+          <section className="wallet-stack">
+            <div className="wallet-stack-back" aria-hidden="true">
+              <span className="stack-line">
+                <span>NIMIQ PAY</span>
+                <span>**** 5678</span>
+                <span>{cfg.tokenSymbol} · EXP 08/27</span>
+              </span>
+            </div>
+            <div className="wallet-card hero-card">
+              <div className="wallet-aurora" aria-hidden="true" />
+              <div className="hero-card-head">
+                <span className="contactless" aria-hidden="true">
+                  <i /><i /><i />
+                </span>
+                <div className="hero-card-pills">
+                  {cfg.chainId !== 137 && <span className="badge glass">{cfg.network}</span>}
+                  {!cfg.live && <span className="badge demo glass">DEMO</span>}
+                </div>
+              </div>
+
+              <div className="hero-balance">
+                <span className="hero-balance-label">Total Balance</span>
+                <div className="hero-balance-value">
+                  <span className="balance-amount">{masked ? '••••••' : connected ? wallet.token : '——'}</span>
+                  <span className="balance-token">{cfg.tokenSymbol}</span>
+                </div>
+                {connected ? (
+                  <button
+                    className="hero-balance-addr"
+                    onClick={revealAddress}
+                    aria-expanded={full}
+                    title={full ? wallet.address : 'Tap to reveal and copy your full address'}
+                  >
+                    {full ? wallet.address : shortAddress(wallet.address)}
+                    <span className="addr-copy">{copied ? <CheckIcon /> : <CopyIcon />}</span>
+                  </button>
+                ) : (
+                  <button className="hero-balance-addr dim" onClick={() => setSheet('connect')}>
+                    Tap to connect your wallet
+                  </button>
+                )}
+              </div>
+
+              <div className="hero-actions">
+                <button className="btn-primary hero-add" onClick={requestPay}>
+                  <PlusIcon /> Add Balance
+                </button>
+                <div className="icon-btn-row">
+                  <button className="icon-btn glass" aria-label="Transfer" onClick={requestPay}>
+                    <SendIcon />
+                  </button>
+                  <button
+                    className="icon-btn glass"
+                    aria-label="Toggle balance visibility"
+                    onClick={() => setMasked((m) => !m)}
+                  >
+                    {masked ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="sponsor-strip">
+                <span className="sponsor-bolt"><BoltIcon /></span>
+                <span>Gas paid for you — 0 POL needed</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="section">
+            <div className="section-head">
+              <h2>Quick Top-Up</h2>
+              <button className="text-link" onClick={requestPay}>See more</button>
+            </div>
+            <div className="scroll-row">
+              <button className="topup-item" onClick={requestPay}>
+                <span className="topup-add-circle"><PlusIcon /></span>
+                <span className="topup-label">Add</span>
+              </button>
+              <span className="scroll-divider" aria-hidden="true" />
+              {DEMO_CONTACTS.map((c) => (
+                <button key={c.name} className="topup-item" onClick={() => pickContact(c.addr)}>
+                  <span className="topup-avatar" style={{ background: avatarFor(c.addr) }}>{c.name[0]}</span>
+                  <span className="topup-label">{c.name}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {connected && (
+            <section className="section">
+              <div className="section-head">
+                <h2>Latest Transactions</h2>
+                <button className="text-link" onClick={requestPay}>See more</button>
+              </div>
+              <div className="scroll-row">
+                {DEMO_TXS.map((tx) => (
+                  <button key={tx.name} className="tx-card" onClick={() => pickContact(tx.addr)}>
+                    <span className="tx-avatar" style={{ background: avatarFor(tx.addr) }}>{tx.name[0]}</span>
+                    <span className="tx-name">{tx.name}</span>
+                    <span className="tx-date">{tx.date}</span>
+                    <span className={`tx-amount ${tx.delta < 0 ? 'neg' : 'pos'}`}>
+                      {tx.delta > 0 ? '+' : ''}{tx.delta.toFixed(2)} USDT0
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="tiny-note">Demo entries — tap one to send to that contact.</p>
+            </section>
+          )}
+        </>
+      )}
+
+      {tab === 'stat' && (
+        <section className="section">
+          <div className="section-head"><h2>Gasless stats</h2></div>
+          <div className="stat-grid">
+            <div className="stat-card">
+              <span className="stat-value">$0.00</span>
+              <span className="stat-label">Network fees paid</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-value">0.00</span>
+              <span className="stat-label">POL spent by you</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-value">1</span>
+              <span className="stat-label">Settlement tx per payment</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-value">{cfg.tokenSymbol}</span>
+              <span className="stat-label">Asset · {cfg.network}</span>
+            </div>
+          </div>
+          <div className="warn-note">
+            <BoltIcon /> The NimZero relayer sponsors every settlement. Your POL balance stays untouched.
+          </div>
+        </section>
+      )}
+
+      {tab === 'activity' && (
+        <section className="section">
+          <div className="section-head"><h2>Activity</h2></div>
+          <div className="activity-list">
+            {DEMO_TXS.map((tx) => (
+              <button key={tx.name} className="activity-row" onClick={() => pickContact(tx.addr)}>
+                <span className="tx-avatar" style={{ background: avatarFor(tx.addr) }}>{tx.name[0]}</span>
+                <span className="activity-main">
+                  <span className="activity-name">{tx.name}</span>
+                  <span className="activity-date">{tx.date} · {cfg.tokenSymbol}</span>
+                </span>
+                <span className={`tx-amount ${tx.delta < 0 ? 'neg' : 'pos'}`}>
+                  {tx.delta > 0 ? '+' : ''}{tx.delta.toFixed(2)}
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="tiny-note">Demo data — tap one to start a payment to that contact.</p>
+        </section>
+      )}
+
+      <nav className="dock" aria-label="Bottom navigation">
+        <button className={`dock-item ${tab === 'home' ? 'active' : ''}`} onClick={() => { setTab('home'); setSheet(null) }}>
+          <HomeIcon /><span>Home</span>
+        </button>
+        <button className={`dock-item ${tab === 'stat' ? 'active' : ''}`} onClick={() => { setTab('stat'); setSheet(null) }}>
+          <ChartIcon /><span>Statistic</span>
+        </button>
+        <div className="dock-slot">
+          <button className="dock-center" aria-label="Start a payment" onClick={requestPay}>
+            <QrIcon />
+          </button>
+        </div>
+        <button className={`dock-item ${tab === 'activity' ? 'active' : ''}`} onClick={() => { setTab('activity'); setSheet(null) }}>
+          <ActivityIcon /><span>Activity</span>
+        </button>
+        <button className="dock-item" onClick={requestPay}>
+          <WalletIcon /><span>Pay</span>
+        </button>
+      </nav>
+
+      {sheet && (
+        <div className="sheet-overlay" onClick={() => setSheet(null)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            {sheet === 'menu' ? (
+              <>
+                <div className="sheet-head">
+                  <h3>Gasless by NimZero</h3>
+                  <button className="icon-btn sheet-close" aria-label="Close" onClick={() => setSheet(null)}>
+                    <XIcon />
+                  </button>
+                </div>
+                <p className="muted">
+                  You pay {cfg.tokenSymbol} on {cfg.network} without holding POL. You sign one authorization,
+                  and the NimZero relayer sponsors the gas and settles it in a single transaction.
+                </p>
+                <div className="warn-note">
+                  <ClockIcon /> Live settlement requires a funded relayer on this network.
+                </div>
+                {connected && (
+                  <button className="btn-primary" onClick={() => { setSheet(null); onPay() }}>
+                    Start a payment
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="sheet-head">
+                  <h3>Connect your wallet</h3>
+                  <button className="icon-btn sheet-close" aria-label="Close" onClick={() => setSheet(null)}>
+                    <XIcon />
+                  </button>
+                </div>
+                <p className="muted">
+                  Link a wallet to send {cfg.tokenSymbol}. The network fee stays $0.00 — the relayer sponsors it.
+                </p>
+                {configError && <div className="error-message">{configError}</div>}
+                {onConnect && (
+                  <button className="btn-primary btn-send" onClick={onConnect}>
+                    <WalletIcon /> Use wallet in Nimiq Pay
+                  </button>
+                )}
+                <button className="btn-secondary" onClick={() => { onStartDemo(); setSheet(null) }}>
+                  <BoltIcon /> Explore the demo
+                </button>
+                <p className="tiny-note">
+                  {onConnect
+                    ? 'Demo uses a simulated wallet so you can walk the full flow anywhere.'
+                    : 'You are already connected.'}
+                </p>
+              </>
+            )}
+          </div>
         </div>
       )}
-    </section>
+    </div>
   )
 }
 
-function Composer(props: {
+function PayScreen(props: {
   cfg: ChainConfig
   wallet: WalletInfo
   recipient: string
@@ -678,11 +892,24 @@ function Composer(props: {
   onRecipient: (value: string) => void
   onAmount: (value: number) => void
   onContinue: () => void
+  onBack: () => void
 }) {
-  const { cfg, wallet, recipient, amount, configError, onRecipient, onAmount, onContinue } = props
+  const { cfg, wallet, recipient, amount, configError, onRecipient, onAmount, onContinue, onBack } = props
   const chips = ['5', '10', '25', '50', '100']
   return (
-    <div className="composer">
+    <div className="screen">
+      <button className="btn-back" onClick={onBack}>
+        <ChevronLeftIcon /> Back to wallet
+      </button>
+
+      <section className="hero">
+        <p className="kicker">GASLESS PAYMENT</p>
+        <h1 className="hero-title">
+          Send {cfg.tokenSymbol} <span className="ink">— pay zero POL.</span>
+        </h1>
+        <p className="hero-sub">Fee is $0.00 and sponsored. Your POL balance is never charged.</p>
+      </section>
+
       <div className="amount-edit">
         <span className="amount-prefix">$</span>
         <input
@@ -750,7 +977,7 @@ function Composer(props: {
       <button className="btn-primary btn-send" onClick={onContinue}>
         Review payment <SendIcon />
       </button>
-      <p className="tiny-note">You'll sign in Nimiq Pay. No POL is ever taken from your wallet.</p>
+      <p className="tiny-note">You sign one authorization. No POL is ever taken from your wallet.</p>
     </div>
   )
 }
@@ -985,6 +1212,96 @@ function CopyIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="9" y="9" width="11" height="11" rx="2.5" />
       <path d="M5 15H4.5A2.5 2.5 0 0 1 2 12.5v-8A2.5 2.5 0 0 1 4.5 2h8A2.5 2.5 0 0 1 15 4.5V5" />
+    </svg>
+  )
+}
+
+const strokeProps = {
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round'
+} as const
+
+function MenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" {...strokeProps} aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h10" />
+    </svg>
+  )
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" {...strokeProps} strokeWidth={2.2} aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  )
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg viewBox="0 0 24 24" {...strokeProps} aria-hidden="true">
+      <path d="M15 5l-7 7 7 7" />
+    </svg>
+  )
+}
+
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" {...strokeProps} aria-hidden="true">
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z" />
+      <circle cx="12" cy="12" r="2.6" />
+    </svg>
+  )
+}
+
+function EyeOffIcon() {
+  return (
+    <svg viewBox="0 0 24 24" {...strokeProps} aria-hidden="true">
+      <path d="M3 3l18 18" />
+      <path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a16.6 16.6 0 0 1-2.4 3.4" />
+      <path d="M6.6 6.6A15.9 15.9 0 0 0 2 12s3.5 7 10 7c1 0 1.9-.1 2.8-.3" />
+      <path d="M9.9 9.9a2.6 2.6 0 0 0 3.5 3.5" />
+    </svg>
+  )
+}
+
+function QrIcon() {
+  return (
+    <svg viewBox="0 0 24 24" {...strokeProps} aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <path d="M14 14h3v3h-3zM21 14h.01M14 21h.01M21 20v1" />
+    </svg>
+  )
+}
+
+function HomeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" {...strokeProps} aria-hidden="true">
+      <path d="M3.5 11 12 4l8.5 7" />
+      <path d="M5.5 9.8V20h13V9.8" />
+    </svg>
+  )
+}
+
+function ChartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" {...strokeProps} aria-hidden="true">
+      <path d="M4 20V10M10 20V4M16 20v-6" />
+      <path d="M3 20h18" />
+    </svg>
+  )
+}
+
+function ActivityIcon() {
+  return (
+    <svg viewBox="0 0 24 24" {...strokeProps} aria-hidden="true">
+      <path d="M4 4v16h16" />
+      <path d="M8 14l3-3 3 3 5-6" />
     </svg>
   )
 }
