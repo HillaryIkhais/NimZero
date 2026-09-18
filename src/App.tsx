@@ -49,7 +49,7 @@ interface ReviewInfo {
 }
 
 interface ReceiptInfo {
-  status: 'verified' | 'failed' | 'awaiting' | 'verifying'
+  status: 'verified' | 'failed' | 'awaiting' | 'verifying' | 'demo'
   txHash: string
   title: string
   message: string
@@ -141,6 +141,64 @@ const DEMO_TXS = [
   { name: 'Kimani', date: 'Sep 02 · 08:33', delta: -12 },
   { name: 'Ava', date: 'Aug 28 · 14:50', delta: -30 }
 ].map((tx) => ({ ...tx, addr: demoAddr(tx.name) }))
+
+function jsonSafe(value: unknown): unknown {
+  if (typeof value === 'bigint') return value.toString()
+  if (Array.isArray(value)) return value.map(jsonSafe)
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) out[key] = jsonSafe(item)
+    return out
+  }
+  return value
+}
+
+async function signTypedDataResilient(params: {
+  signer: Signer
+  provider: BrowserProvider | null
+  address: string
+  domain: Parameters<Signer['signTypedData']>[0]
+  types: Parameters<Signer['signTypedData']>[1]
+  message: Record<string, unknown>
+}): Promise<string> {
+  const { signer, provider, address, domain, types, message } = params
+  const typedPayload = {
+    types,
+    primaryType: Object.keys(types)[0],
+    domain: jsonSafe(domain),
+    message: jsonSafe(message)
+  }
+  const attempts: Array<() => Promise<string>> = [
+    () => signer.signTypedData(domain, types, message),
+    async () => {
+      if (!provider) throw new Error('EVM provider unavailable')
+      const sig = (await provider.send('eth_signTypedData_v4', [address, JSON.stringify(typedPayload)])) as string
+      if (!sig) throw new Error('wallet returned an empty signature')
+      return sig
+    },
+    async () => {
+      if (!provider) throw new Error('EVM provider unavailable')
+      const sig = (await provider.send('eth_signTypedData', [address, typedPayload])) as string
+      if (!sig) throw new Error('wallet returned an empty signature')
+      return sig
+    },
+    async () => {
+      if (!provider) throw new Error('EVM provider unavailable')
+      const sig = (await provider.send('wallet_signTypedData', [address, typedPayload])) as string
+      if (!sig) throw new Error('wallet returned an empty signature')
+      return sig
+    }
+  ]
+  let lastError: unknown = null
+  for (const attempt of attempts) {
+    try {
+      return await attempt()
+    } catch (err) {
+      lastError = err
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('The wallet did not return a signature.')
+}
 
 function App() {
   const [cfg, setCfg] = useState<ChainConfig | null>(null)
@@ -301,18 +359,43 @@ function App() {
     }
 
     const [permitSignature, relaySignature] = await Promise.all([
-      signer.signTypedData(
-        usdt0PermitDomain(cfg.chainId, {
+      signTypedDataResilient({
+        signer,
+        provider,
+        address: wallet.address,
+        domain: usdt0PermitDomain(cfg.chainId, {
           token: cfg.token,
           name: cfg.tokenName,
           version: cfg.tokenVersion,
           saltSlot: cfg.saltSlotPermit
         }),
-        USDT0_PERMIT_TYPES,
-        permitMessage
-      ),
-      signer.signTypedData(relayDomain(cfg.relay, cfg.chainId), RELAY_ORDER_TYPES, orderMessage)
+        types: USDT0_PERMIT_TYPES,
+        message: permitMessage as Record<string, unknown>
+      }),
+      signTypedDataResilient({
+        signer,
+        provider,
+        address: wallet.address,
+        domain: relayDomain(cfg.relay, cfg.chainId),
+        types: RELAY_ORDER_TYPES,
+        message: orderMessage as Record<string, unknown>
+      })
     ])
+
+    if (demo) {
+      setVerification((v) => [
+        ...v,
+        `Demo wallet ${shortAddress(wallet.address)} created the EIP-712 Permit + RelayOrder signatures.`,
+        'Live settlement is never simulated — sign again from inside Nimiq Pay and the relayer settles on-chain.'
+      ])
+      setReceipt({
+        status: 'demo',
+        txHash: '',
+        title: 'Demo authorization signed',
+        message: `The two signatures are valid, but no transaction was sent. Connect the Nimiq Pay wallet and the NimZero relayer settles the payment on ${cfg.network} for real.`
+      })
+      return
+    }
 
     const dispatch = {
       intent: {
@@ -543,7 +626,13 @@ function App() {
         )}
 
         {screen === 'review' && review && (
-          <ReviewScreen cfg={cfg} review={review} onBack={() => setScreen('home')} onConfirm={confirmPayment} />
+          <ReviewScreen
+            cfg={cfg}
+            review={review}
+            demo={!!demo}
+            onBack={() => setScreen('home')}
+            onConfirm={confirmPayment}
+          />
         )}
 
         {screen === 'signing' && (
@@ -985,10 +1074,11 @@ function PayScreen(props: {
 function ReviewScreen(props: {
   cfg: ChainConfig
   review: ReviewInfo
+  demo: boolean
   onBack: () => void
   onConfirm: () => void
 }) {
-  const { cfg, review, onBack, onConfirm } = props
+  const { cfg, review, demo, onBack, onConfirm } = props
   return (
     <div className="screen">
       <section className="hero compact">
@@ -1032,7 +1122,7 @@ function ReviewScreen(props: {
         Back
       </button>
       <button className="btn-primary btn-send" onClick={onConfirm}>
-        <WalletIcon /> Authorize in wallet
+        <WalletIcon /> {demo ? 'Sign demo authorization' : 'Authorize in wallet'}
       </button>
       <p className="tiny-note">
         You'll sign one authorization in Nimiq Pay. No gas is taken from your wallet — ever.
@@ -1098,7 +1188,7 @@ function ReceiptScreen(props: {
   const { cfg, receipt, verification, onReset } = props
   if (!receipt) return null
   const verified = receipt.status === 'verified'
-  const pending = receipt.status === 'awaiting' || receipt.status === 'verifying'
+  const pending = receipt.status === 'awaiting' || receipt.status === 'verifying' || receipt.status === 'demo'
   const failed = receipt.status === 'failed'
   const orbClass = verified ? 'ok' : failed ? 'fail' : 'pending'
   const orbIcon = verified ? <CheckIcon /> : failed ? <XIcon /> : <ClockIcon />
@@ -1137,7 +1227,10 @@ function ReceiptScreen(props: {
 
       {pending && (
         <div className="warn-note">
-          <ClockIcon /> Settlement is pending live execution. Nothing is simulated.
+          <ClockIcon />{' '}
+          {receipt.status === 'demo'
+            ? 'Demo: the EIP-712 signatures were created in a simulated wallet. No transaction was sent — use Nimiq Pay for a real settlement.'
+            : 'Settlement is pending live execution. Nothing is simulated.'}
         </div>
       )}
 
