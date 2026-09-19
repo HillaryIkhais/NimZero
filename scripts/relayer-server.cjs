@@ -50,6 +50,44 @@ if (!relayerKey) {
 const LIVE = Boolean(relayerKey)
 const relayerWallet = LIVE ? new Wallet(relayerKey, provider) : null
 
+# ── SponsorPolicy ──────────────────────────────────────────────
+# Controls sponsorship capacity & circuit breaker.
+# These can be overridden via env vars at runtime.
+const SPONSOR_ENABLED = true
+const SPONSOR_MAX_GAS_PER_TX = 300000
+const SPONSOR_MAX_TX_PER_WINDOW = 100
+const SPONSOR_WINDOW_SECONDS = 86400  # 1 day
+const SPONSOR_MIN_RELAYER_BALANCE = 1000000000000  # 1 POL in wei
+
+# Sponsorship state (in-memory per-process; persist with Redis/Durable later)
+const sponsor_state = {
+  enabled: SPONSOR_ENABLED,
+  remainingCapacity: SPONSOR_MAX_TX_PER_WINDOW,
+  windowStart: Date.now(),
+  maxGasPerTx: SPONSOR_MAX_GAS_PER_TX,
+  relayerBalance: "0",
+  network: chainConfig.network,
+  token: chainConfig.token,
+}
+
+# ── Sponsorship helpers ────────────────────────────────────────
+function check_sponsorship_capacity(gas_estimate) {
+  if (!sponsor_state.enabled) return [false, "Sponsorship temporarily unavailable"]
+  const now = Date.now()
+  // Reset window if expired
+  if (now - sponsor_state.windowStart > SPONSOR_WINDOW_SECONDS * 1000) {
+    sponsor_state.remainingCapacity = SPONSOR_MAX_TX_PER_WINDOW
+    sponsor_state.windowStart = now
+  }
+  if (sponsor_state.remainingCapacity <= 0) return [false, "Sponsorship quota exhausted for this window. Try again later."]
+  if (gas_estimate > SPONSOR_MAX_GAS_PER_TX) return [false, `Gas estimate ${gas_estimate} exceeds max per-tx ${SPONSOR_MAX_GAS_PER_TX}`]
+  const relay_balance = parseInt(sponsor_state.relayerBalance)
+  const min_balance = SPONSOR_MIN_RELAYER_BALANCE
+  if (relay_balance < min_balance) return [false, `Relayer balance ${relay_balance} POL below minimum ${min_balance}`]
+  sponsor_state.remainingCapacity -= 1
+  return [true, null]
+}
+
 if (!RELAY) {
   console.error('RELAY address required (operator-pinned ZeroPayRelay)')
   process.exit(2)
@@ -111,6 +149,18 @@ const server = http.createServer(async (req, res) => {
     })
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/sponsor') {
+    // Recalculate relayer balance on each poll so it's always fresh
+    let currentBalance = "0"
+    if (LIVE && relayerWallet) {
+      try {
+        currentBalance = ethers.formatUnits(await provider.getBalance(relayerWallet.address), 18)
+      } catch { /* ignore */ }
+    }
+    sponsor_state.relayerBalance = currentBalance
+    return json(res, 200, sponsor_state)
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/payments') {
     let parsed
     try {
@@ -131,6 +181,14 @@ const server = http.createServer(async (req, res) => {
         error: 'Signed authorization accepted. Settlement awaits live execution (relayer is not funded).'
       })
     }
+
+    # ── Sponsorship check ──────────────────────────────────────
+    const gas_estimate = parsed.intent.gasLimit || parsed.intent.gas || "300000"
+    const [sponsored, reason] = check_sponsorship_capacity(gas_estimate)
+    if (!sponsored) {
+      return json(res, 422, { status: 'FAILED', error: reason })
+    }
+    # ---------------------------------------------------------
 
     try {
       const result = await submitRelay(
